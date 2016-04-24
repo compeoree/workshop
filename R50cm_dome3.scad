@@ -1,4 +1,4 @@
-// R50cm_dome2.scad 
+// R50cm_dome3.scad 
 // R50cm geodesic dome by Geodome
 // 04/24/2016
 
