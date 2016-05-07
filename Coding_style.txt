@@ -1,0 +1,268 @@
+﻿     
+      Permission is granted to copy, distribute and/or modify this
+      document under the terms of the GNU Free Documentation License,
+      Version 1.3 or any later version published by the Free Software
+      Foundation; with no Invariant Sections, no Front-Cover Texts and
+      no Back-Cover Texts.  A copy of the license is included in the
+      section entitled "GNU Free Documentation License".
+
+        
+        Coding Style 
+
+Hughe <janpenguin@riseup.net>, 5/2016
+
+
+Table of content 
+
+Preface
+
+1. Semantics
+
+1.1 Naming
+1.2 Functions
+1.3 Comments
+1.4 Macros
+
+2. Layout
+
+2.1 Indentation
+2.2 Lines and strings
+2.3 Placing braces and spaces
+2.4 Use idioms for consistency
+2.5 Conditional Compilation
+
+        Preface
+
+I compiled most of information from the references I read to make a short coding
+guide for personal usage. Target languages are C/C++, Python, and OpenSCAD in
+mind.  
+
+        1. Semantics  
+
+ Simplicity: keep programs short and manageable.
+  
+ Clarity: make sure they are easy to understand for people as well as machines.
+
+ Generality: programs work well in a broad range of situations and adapt well as new situations arise.
+
+(Automation: let the machine do the work for us, freeing us from mundane tasks.)
+
+Write code that is easy to understand. It needs fewer comments than bad code.
+
+Good style should be a matter of habit.
+
+Avoid negations.
+
+1.1 Naming 
+
+Use meaningful short variable name.
+
+Descriptive names for global variables and functions.
+
+        count_active_users() instead cntusr()
+
+Avoid encoding the type of a function into the name.
+
+Local variable names should be short, and to the point. If you have 
+a loop counter, 'i' or 'j' are suffice.
+
+Give names to magic numbers. 
+(Magic numbers are the constants, array sizes, character positions, conversion factors, and other literal numeric values that appear in programs.)
+
+Define numbers as constants.
+
+Use the keyword or built-in function of the language to calculate the size of an object.
+
+        /* sizeof in C/C++ */
+        #define NELEMS(array) (sizeof(array) / sizeof(array[0]))
+
+        double dbuf[100];
+
+        for (i = 0; i < NELEMS(dbuf); i++)
+
+        # Python 
+        import sys
+        x = 2
+        sys.getsizeof(x)
+
+1.2 Functions
+
+A function should be short, efficient, and do just one thing. It should fit on one or two screenfuls of text, 24 to 48 lines. (the ISO/ANSI screen size is 80x24).
+
+A complex function that needs many lines should be divided by several helper
+functions with descriptive names.
+
+The number of local variables in the function is below 5 to 10.
+
+In source files, separate functions with one blank line.
+
+In function prototypes, include parameter names with their data types.
+
+Put comments outside a function body.
+
+If the function uses difficult algorithm or complex data structure, explain it
+thoroughly, give references for potential the reader if possible.
+
+Use inline function whose number of lines less than 3 instead macro.
+
+If the name of a function is an action or an imperative command, the function
+should return an error-code integer. If the name is a predicate, the function
+should return a "succeeded" boolean.
+
+1.3 Comments
+
+It's much better to write the code so that the working is obvious.
+
+1.4 Macros 
+
+(It mostly apply to C language)
+
+Use upper cases for macros that define constants and labels.
+
+Macros resembling functions may be named in lower case.
+        
+Parenthesize the macro body and arguments.
+
+        #define square(x) ((x) * (x))
+
+Things to avoid when using macros:
+        1) macros that affect control flow
+        2) macros that depend on having a local variable with a magic name
+        3) macros with arguments that are used as l-values: FOO(x) = y
+        4) forgetting about precedence of operators 
+
+
+        2. Layout 
+
+2.1 Indentation
+
+Use one Tabs that uses 8 spaces.
+Maximum level of indentation is 3.
+
+2.2 Lines and strings
+
+Set the length of line to 80 columns.
+Don't break user-visible strings as status messages - error, warning, status.
+
+2.3 Placing braces and spaces 
+
+Put the starting brace over the other.
+
+        if (x is true) {
+                /* ... */
+        }
+
+Put the opening brace at the beginning of the next line in function.
+
+        int function()
+        {
+                /* ... */
+        }
+
+Skip braces where a single statement will do.
+
+        if (condition)
+                action();
+
+Use a space after keywords: if, switch, case, for, do, while
+but not with some keywords and built-in functions:
+        sizeof, typeof, alignof, and etc. in C
+        int(), float(), ... in Python 
+
+Use one space around most binary and ternary operators:
+        
+         =  +  -  <  >  *  /  %  |  &  ^  <=  >=  ==  !=  ?  :
+
+Unary operators have no space.
+
+        &  *  +  -  ~  ! 
+
+2.4 Use idioms for consistency 
+
+for loop (initial; condition; increment) 
+
+        for (int i = 0; i < n; i++)
+                array[i] = 1.0;
+
+        for (p = list; p != NULL; p = p->next)
+                /* ... */
+Put an assignment inside a loop condition
+
+        while ((c = getchar()) != EOF)
+                putchar(c);
+
+Use else-if instead nested if statements.
+
+        /* Bad */ 
+        if (argc == 3)
+                if ((fin = fopen(argv[1], "r")) != NULL)
+                        if ((fout = fopen(argv[2], "w")) != NULL) {
+                                while ((c = getc(fine)) != EOF)
+                                        putc(c, fout);
+                                fclose(fin); fclose(fout);
+                        } else
+                                printf("Can't open output file %s\n", argv[2]);
+                else
+                        printf("Can't open input file %s\n", argv[1]);
+        else
+                printf("Usage: cp inputfile outputfile \n");
+
+
+        /* Good */
+        if (argc != 3)
+                printf("Usage: cp inputfile outputfile \n");
+        else if ((fin = fopen(argv[1], "r")) == NULL)
+                printf("Can't open input file %s\n", argv[1]);
+        else if ((fout = fopen(argv[2], "w")) == NULL) {
+                printf("Can't open output file %s\n", argv[2]);
+                fclose(fin);
+        } else {
+                while ((c = getc(fin)) != EOF)
+                        putc(c, fout);
+                fclose(fin);
+                fclose(fout);
+        }
+
+Use else-if statements when it gives clear understanding of the control instead switch-case.
+
+        // Typical
+        switch (c) {
+        case '-':
+                sign = -1;
+                /* fall through */
+        case '+':
+                c = getchar();
+                break;
+        case '.':
+                break;
+        default:
+                if (!isdigit(c))
+                        return 0;
+                break;
+        }
+
+        // Good 
+        if (c == '-') {
+                sign = -1;
+                c = getchar();
+        } else if (c == '+') {
+                c = getchar();
+        } else if (c != '.' && !isdigit(c)) {
+                return 0;
+        }
+
+2.5 Conditional Compilation
+
+Wherever possible, don't use preprocessor conditionals (#if, #ifdef) in .c
+files; doing so makes code harder to read and logic harder to follow.
+
+Prefer to compile out entire functions, rather than portions of functions or
+portions of expressions.  Rather than putting an ifdef in an expression, factor
+out part or all of the expression into a separate helper function and apply the
+conditional to that function.
+
+
+Reference: 
+
+The Practice of Programming, Brian W. Kernighan, Rob Pike
+Linux kernel coding style, Linus Torvalds 
