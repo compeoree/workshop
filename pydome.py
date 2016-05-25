@@ -21,8 +21,10 @@
 # Python 3.4 
 # pydome.py 
 
+from domemath import *
+from domeutil import * 
+import sortedome as sd 
 from copy import deepcopy    # deep copy a list object    
-import math as m             # math functions 
 
 
 VERSION = "0.1"
@@ -152,86 +154,17 @@ global print_size
 print_size = 8
 
 def _print_object(obj, size=0, header="_print_object()"):
-        end = len(obj)
+        start, end = 0, len(obj)
         if end > 0: 
-                start = end - size if end > size else 0
+                if size == 0:
+                        start = 0
+                elif end > size:
+                        start = end - size 
                 print("{}: {} to {}".format((header), start, end))
                 for i in range(start, end):
                         print(i, obj[i])
         else:
                 print("{}: {}".format(header, "Empty container!!"))
-
-def _f6(n):
-        """ Round off floating point number to six decimal point """
-        return round(float(n), 6)
-
-
-# Return the distance between two Points 
-def ptDist(a, b):
-        dx = a.x - b.x
-        dy = a.y - b.y
-        dz = a.z - b.z
-        d = m.sqrt(dx*dx + dy*dy + dz*dz)
-        return _f6(d) 
-
-
-# Add two Points 
-def ptAdd(a, b):
-        x = _f6(a.x + b.x)
-        y = _f6(a.y + b.y)
-        z = _f6(a.z + b.z)
-        return Point(x, y, z)
-
-# Subtract two Points 
-def ptSub(a, b):
-        x = _f6(a.x - b.x)  
-        y = _f6(a.y - b.y)
-        z = _f6(a.z - b.z)
-        return Point(x, y, z)
-
-# Multiply a Point by a scalar 
-def ptMul0(a, Mx, out):
-        out.x = _f6(Mx * a.x)
-        out.y = _f6(Mx * a.y)
-        out.z = _f6(Mx * a.z)
-
-
-# Multiply Mx to a Point 
-def ptMul(a, Mx):
-        x = _f6(Mx * a.x)
-        y = _f6(Mx * a.y)
-        z = _f6(Mx * a.z)
-        return Point(x, y, z) 
-
-
-def vlen(v):
-        """ 
-        Return the length of a vector created by a Point object 
-        Point v: 
-        """
-        d = m.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
-        return _f6(d) 
-
-
-def vnormalize(v):
-        """
-        Normalize a vector (x, y, z) to unit vector (u)
-               v
-        u  = ----- 
-              |v| 
-        |v| = sqrt(x^2 + y^2 + z^2)
-        Point v:
-        """
-        _d = m.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
-        d = _f6(_d)
-        if d == 0.0:
-                print("normalize(): zero length vector")
-                return
-
-        x = _f6(v.x / d)
-        y = _f6(v.y / d)
-        z = _f6(v.z / d)
-        return Point(x, y, z)
 
 
 def normalize_vertex(vtx, r, frac):
@@ -251,34 +184,26 @@ def normalize_vertex(vtx, r, frac):
                 z = vtx.z * l
                 return Point(x, y, z)
 
-# Point 
-class Point:
-        def __init__(self, x=0, y=0, z=0):
-                self.x = _f6(x) 
-                self.y = _f6(y)
-                self.z = _f6(z)
-                self.ix = int(x)
-                self.iy = int(y)
-                self.iz = int(z)
 
-        def __str__(self):
-                return 'Point<{0:9.6f}, {1:9.6f}, {2:9.6f} >'.format(self.x, self.y, self.z)
-
-
-# Edge
 class Edge:
-        """ Edge has two vertices, length, name """
+        """ 
+        Edge has two vertices, length, name.
+                Default length unit is mm, decimal point to two.
+        """
         def __init__(self, v0=0, v1=0):
                 self.v0 = int(v0)
                 self.v1 = int(v1)
                 self.length = None
                 self.name = '-' 
 
-        def set_length(self, val):
-                self.length = val
+        def set_length(self, val, metric=True):
+                self.length = fn6(val, 2) if metric is True else fn6(val, 4) 
 
         def set_name(self, edgetype):
                 self.name = edgetype 
+
+        def value(self):
+                return self.v0, self.v1, self.length, self.name 
 
         def __str__(self):
                 if self.length is None:
@@ -287,7 +212,6 @@ class Edge:
                         return 'Edge<{0}, {1}, {2:9.6f}, {3}>'.format(self.v0, self.v1, 
                                                     self.length, self.name)
 
-# Face 
 class Face:
         """ Face has three vertices: A, B, C """
 
@@ -301,12 +225,15 @@ class Face:
                 self.B = int(b)
                 self.C = int(c)
 
+        def value(self):
+                return self.A, self.B, self.C 
+
         def __str__(self):
                 return 'Face<{}, {}, {}>'.format(self.A, self.B, self.C)
 
 
 # Vertex
-class Vertex:
+class Vertex0:
         SZ = 6  # size of integer array (list) 
         def __init__(self, v1, n1, edgelist1):
                 self.vtx = v1
@@ -318,31 +245,30 @@ class Vertex:
                 s2 = str(self.edges)
                 return s1+s2 
 
+
 def _Dome_init_helper(lst):
         if lst is None:
                 return list(), 0
         else:
                 return deepcopy(lst), len(lst)
 
-# Dome
+
 class Dome:
-        def __init__(self, r=1.0, nu=2, vertexlist=None, edgelist=None, facelist=None):
-                self.radius = r
-                self.frq = nu
+
+        def __init__(self, metric=True, r=10.0, nu=2, vertexlist=None, edgelist=None,
+                        facelist=None):
+                self.unit, self.radius, self.frq = metric, r, nu 
                 self.V, self.nvert = _Dome_init_helper(vertexlist)
                 self.E, self.nedge = _Dome_init_helper(edgelist)
                 self.F, self.nface = _Dome_init_helper(facelist)
        
-                # total numbers of verticies, edges, and faces 
+                # total number of verticies, edges, and faces 
                 self.nV, self.nE, self.nF = 0, 0, 0 
-    
+                self.L, self.nL = None, 0
+
         def set_dimension(self, v, e, f):
                 self.nV, self.nE, self.nF = v, e, f
 
-        # It gives garbage object! 
-        #def XX_add_vertex(self, other):
-        #        self.V.append(other)
-        #        self.nvert = len(self.V)
 
         # Point object 
         def add_vertex(self, other):
@@ -380,14 +306,14 @@ class Dome:
         def face(self, i):
                 return self.F[i] if i < len(self.F) else -1
 
-        # Calculation helper 
+        # Helper function
         def _edge_length(self, pos):
                 e = self.E[pos]
 
                 # Get two Points
                 a, b = self.V[e.v0], self.V[e.v1]
                 d = ptDist(a, b)
-                self.E[pos].set_length(d)     
+                self.E[pos].set_length(d, self.unit)     
 
         # Compute the length of one or all edges
         def compute_edge_length(self, pos=None):
@@ -426,12 +352,11 @@ class Dome:
         # Scale the dome by factor
         # Usually factor is dome radius. 
         def scale(self, Mx):
-
                 for i in range(self.nvert):
                         _v = self.V[i]
-                        x = _f6(Mx * _v.x)
-                        y = _f6(Mx * _v.y)
-                        z = _f6(Mx * _v.z)
+                        x = fn6(Mx * _v.x)
+                        y = fn6(Mx * _v.y)
+                        z = fn6(Mx * _v.z)
                         self.V[i] = Point(x, y, z)
 
                 self.compute_edge_length()
@@ -474,10 +399,11 @@ class Dome:
 
         def vtx_find0(self, target):
                 M = 1000000
+                epsilon = 0.1 * M
 
                 for i in range(len(self.V)):
                         v = self.vertex(i)
-                        if int(M * ptDist(v, target)) < int(M * 0.1):
+                        if int(M * ptDist(v, target)) < epsilon:
                                 print("\t\t vtx_find0(): {} == {}".format(v, target))
                                 return i
                 return -1
@@ -571,7 +497,7 @@ class Dome:
                     int f: frequency number
                 """
                 f = self.frq        # frequency 
-                frac = _f6(1.0 / f)
+                frac = fn6(1.0 / f)
 
                 p0, p1, p2 = din.vertex(face.A), din.vertex(face.B), din.vertex(face.C)
                 v01, v02, v12 = ptSub(p1, p0), ptSub(p2, p0), ptSub(p2, p1)
@@ -667,7 +593,6 @@ class Dome:
                 it = lst[pos]
                 return Point(*it)
 
-
         def __str__(self):
                 s0 = 'Dome:'
                 s1 = 'radius: {}\n'.format(self.radius)
@@ -714,7 +639,7 @@ icos_edge = init_array(_icos_edge, Edge, 5)
 icos_face = init_array(_icos_face, Face, 5)
 
 # Unit (Icosahedron) dome of radius 1.0 
-f0dome = Dome(1.0, 1, icos_vert, icos_edge, icos_face)
+f0dome = Dome(True, 1.0, 1, icos_vert, icos_edge, icos_face)
 
 def normalize_cmd(dome, radius, f):
         """
@@ -725,17 +650,10 @@ def normalize_cmd(dome, radius, f):
         """
         normalize_dome(dome, radius, f)
 
-def get_title():
-        import time 
-
-        now = time.strftime("%Y/%m/%d %H:%M:%S")
-        name = PROGRAM + ' ' + VERSION
-        return '{} {}\n\n'.format(name, now) 
-
 
 # Save dome data in OpenSCAD file
 def write_dome2(dome, radius, filename):
-        stamp = get_title()
+        stamp = get_title(PROGRAM, VERSION)
 
         array_head = ["V = [\n", "E = [\n", "F = [\n"]
         array_tail = "];\n\n"
@@ -761,10 +679,10 @@ def write_dome2(dome, radius, filename):
                 e = dome.E[i]
                 etype = e.name if e.name != None else "-"
                 if i == dome.nedge:
-                        of.write("\t[{0:2d}, {1:2d}, {2:9.6f}, {3}]  // {4:3d}\n".format(e.v0, e.v1, 
+                        of.write("\t[{0:2d}, {1:2d}, {2:9.6f}, \"{3}\"]  // {4:3d}\n".format(e.v0, e.v1, 
                                                                                  e.length, etype, i))
                 else:
-                        of.write("\t[{0:2d}, {1:2d}, {2:9.6f}, {3}], // {4:3d}\n".format(e.v0, e.v1, 
+                        of.write("\t[{0:2d}, {1:2d}, {2:9.6f}, \"{3}\"], // {4:3d}\n".format(e.v0, e.v1, 
                                                                                  e.length, etype, i))
         of.write(array_tail)
 
@@ -813,7 +731,7 @@ def write_dome(dome, radius, filename):
         of.close()
 
 
-def tesselate_cmd(radius, frq):
+def tesselate_cmd(metric, radius, frq):
         """
         Initialize a tesselated dome.  Tesselate f0dome by the specified
         frequency and copy to cdome.
@@ -822,21 +740,37 @@ def tesselate_cmd(radius, frq):
         """
         global f0dome
 
-        aDome = Dome(radius, frq)
-        aDome.tesselate(f0dome)
-        aDome.scale(radius)
-        aDome.normalize()
-
-        # use normalize_now() routine
-        #normalize_dome(tdome, radius, 1.0)
+        adome = Dome(metric, radius, frq)
+        adome.tesselate(f0dome)
+        adome.scale(radius)
+        adome.normalize()
 
         # Default file 
         fname  = "pydome.data"
-        write_dome(aDome, radius, fname)
-        write_dome2(aDome, radius, "pydome.scad")
+        write_dome(adome, radius, fname)
+        write_dome2(adome, radius, "pydome.scad")
+
+        # Sort vertices, edges, faces  
+        svertices = sd.sort_vertices(adome.V)
+        vertex_map = sd.get_v2ov_map(adome.V, svertices)
+        sedges = sd.sort_edges(adome.E, vertex_map)
+        sfaces = sd.sort_faces(adome.F, vertex_map)
+
+        et = sd.EdgeTypes(sedges)
+        et.process() 
+        edgetypes = et.value()
+        for i in edgetypes:
+                print(i)
+
+        sd.write_sdome_scad(svertices, sedges, sfaces, radius, frq, "pydome_sorted.scad")
+
 
 if __name__ == '__main__':
 
-        # Frequency 2, radius 12 inches 
-        tesselate_cmd(12.0, 2)
+        # Radius 304.80 mm, frequency 3
+        # tesselate_cmd(304.80, 3)
+        
+        # Radius 20 mm, frequency 2
+        tesselate_cmd(True, 30.00, 4)
+
 
