@@ -23,6 +23,7 @@
 
 from domemath import *
 from domeutil import * 
+from domefile import *
 import sortedome as sd 
 from copy import deepcopy    # deep copy a list object    
 
@@ -30,26 +31,6 @@ from copy import deepcopy    # deep copy a list object
 VERSION = "0.1"
 PROGRAM = "pydome"
 DEBUG = True 
-
-
-# coordinates for icosahedron with edge length 1.05146 
-# radius is 1.0
-# Z is up 
-# 12 vertices
-_icos_vert0 = [
-        [ 0.000000,  0.000000,  1.000000],  # 0 
-        [ 0.894427,  0.000000 , 0.447214],  # 1
-        [ 0.276393, -0.850651,  0.447214],  # 2
-        [-0.723607, -0.525731,  0.447214],  # 3
-        [-0.723607,  0.525731,  0.447214],  # 4
-        [ 0.276393,  0.850651,  0.447214],  # 5
-        [-0.894427,  0.000000, -0.447214],  # 6 
-        [-0.276393,  0.850651, -0.447214],  # 7 
-        [ 0.723607,  0.525731, -0.447214],  # 8 
-        [ 0.723607, -0.525731, -0.447214],  # 9 
-        [-0.276393, -0.850651, -0.447214],  # 10 
-        [ 0.000000,  0.000000, -1.000000]   # 11
-        ]
 
 # Sorted by quadrant order of Cartesian coordinate system 
 _icos_vert = [
@@ -72,19 +53,6 @@ _icos_vert = [
 
 
 # 30 edges 
-_icos_edge0 = [
-        [0, 1, 0., None],   [0, 2, 0., None],   [0, 3, 0., None],
-        [0, 4, 0., None],   [0, 5, 0., None],   [1, 2, 0., None],
-        [2, 3, 0., None],   [3, 4, 0., None],   [4, 5, 0., None],
-        [5, 1, 0., None],   [1, 9, 0., None],   [9, 2, 0., None],
-        [2, 10, 0., None],  [10, 3, 0., None],  [3,6,0., None],
-        [6, 4, 0., None],   [4, 7, 0., None],   [7, 5, 0., None],
-        [5, 8, 0., None],   [8, 1, 0., None],   [6, 7, 0., None],
-        [7, 8, 0., None],   [8, 9, 0., None],   [9, 10, 0., None],
-        [10, 6, 0., None],  [11, 7, 0., None],  [11, 8, 0., None],
-        [11, 9, 0., None],  [11, 10, 0., None], [11, 6, 0., None]
-        ]
-
 _icos_edge = [
         [0, 1, 0., None],   [0, 2, 0., None],   [0, 3, 0., None],
         [0, 4, 0., None],   [0, 5, 0., None],   [1, 2, 0., None],
@@ -96,30 +64,6 @@ _icos_edge = [
         [6, 7, 0., None],   [7, 8, 0., None],   [8, 9, 0., None],
         [9, 10, 0., None],  [11, 6, 0., None],  [11, 7, 0., None],
         [11, 8, 0., None],  [11, 9, 0., None], [11, 10, 0., None]
-        ]
-
-# 20 faces 
-_icos_face0 = [
-        [0, 2, 1],
-        [0, 3, 2],
-        [0, 4, 3],
-        [0, 5, 4],
-        [0, 1, 5],
-        [1, 2, 9],
-        [2, 10, 9],
-        [2, 3,10],
-        [3, 6, 10],
-        [3, 4, 6],
-        [4, 7, 6],
-        [4, 5, 7],
-        [5, 8, 7],
-        [5, 1, 8],
-        [1, 9, 8],
-        [11, 6, 7],
-        [11, 7, 8],
-        [11, 8, 9],
-        [11, 9, 10],
-        [11, 10, 6]
         ]
 
 # 20 faces 
@@ -196,7 +140,7 @@ class Edge:
                 self.length = None
                 self.name = '-' 
 
-        def set_length(self, val, metric=True):
+        def set_length(self, val, metric):
                 self.length = fn6(val, 2) if metric is True else fn6(val, 4) 
 
         def set_name(self, edgetype):
@@ -252,12 +196,13 @@ def _Dome_init_helper(lst):
         else:
                 return deepcopy(lst), len(lst)
 
-
+# decimal_factor: Set the number of decimal point for vertex arithematic  
 class Dome:
-
         def __init__(self, metric=True, r=10.0, nu=2, vertexlist=None, edgelist=None,
                         facelist=None):
-                self.unit, self.radius, self.frq = metric, r, nu 
+                self.decimal_factor = 6 
+
+                self.metric, self.radius, self.frq = metric, r, nu 
                 self.V, self.nvert = _Dome_init_helper(vertexlist)
                 self.E, self.nedge = _Dome_init_helper(edgelist)
                 self.F, self.nface = _Dome_init_helper(facelist)
@@ -269,6 +214,8 @@ class Dome:
         def set_dimension(self, v, e, f):
                 self.nV, self.nE, self.nF = v, e, f
 
+        def set_df(self, n):
+                self.decimal_factor = int(n)
 
         # Point object 
         def add_vertex(self, other):
@@ -313,7 +260,7 @@ class Dome:
                 # Get two Points
                 a, b = self.V[e.v0], self.V[e.v1]
                 d = ptDist(a, b)
-                self.E[pos].set_length(d, self.unit)     
+                self.E[pos].set_length(d, self.metric)     
 
         # Compute the length of one or all edges
         def compute_edge_length(self, pos=None):
@@ -393,40 +340,21 @@ class Dome:
                         e = Edge(v0, v1)
                         self.add_edge(e)
                         print("match_edge(): NEW ", e)
-                else:
-                        print("match_edge(): {}-{} exists {}".format(v0, v1, self.edge(pos)))
 
 
         def vtx_find0(self, target):
-                M = 1000000
-                epsilon = 0.1 * M
-
-                for i in range(len(self.V)):
-                        v = self.vertex(i)
-                        if int(M * ptDist(v, target)) < epsilon:
-                                print("\t\t vtx_find0(): {} == {}".format(v, target))
-                                return i
+                pos = find_vertex0(target, self.V, self.decimal_factor)
+                if pos != -1:
+                        print("\t vtx_find0(): {0} at {1}".format(target, pos))
+                        return pos
                 return -1
 
-   
         # integer number comparision
         def vtx_find1(self, target):
-                M = 1000000
-                ix = int(target.x * M) 
-                iy = int(target.y * M)
-                iz = int(target.z * M)
-                        
-                print("vtx_find1(): ({}, {}, {})->({},{},{})".format(target.x,
-                                                target.y, target.z, ix, iy, iz))
-                for i in range(len(self.V)):
-                        v = self.vertex(i)
-                        jx = int(v.x * M) 
-                        jy = int(v.y * M)
-                        jz = int(v.z * M)
-                        if ix == jx and iy == jy and iz == jz:
-                                print("\t\t vtx_find1({}): ({}, {}, {})".format(i, jx, jy, jz))
-                                print("\t\t vtx_find1({}): {} == {}".format(i, v, target))
-                                return i
+                pos = find_vertex1(target, self.V, self.decimal_factor)
+                if pos != -1:
+                        print("\t vtx_find1(): {0} at {1}".format(target, pos))
+                        return pos 
                 return -1
 
         def match_vtx(self, target):
@@ -436,10 +364,9 @@ class Dome:
                 Point: vtx 
                 Dome: dome
                 """
-                print("match_vtx(): Target = ", target)
-
                 # Check the vertex in Dome's vertex array
-                pos = self.vtx_find0(target)
+                # pos = self.vtx_find0(target)
+                pos = self.vtx_find1(target)
                 if pos != -1:
                         return pos
 
@@ -447,7 +374,6 @@ class Dome:
                         print("match_vtx(): out of vertices in tesselate")
                         return
 
-                # Add new vertex - Point object 
                 self.add_vertex(target)
 
                 # [0 ... vertex_count-1] 
@@ -461,14 +387,9 @@ class Dome:
                     Dome: dome
                     ptr_int nf, ne, nv: face, edge, and vertex count 
                 """
-                print("\nadd_face(): START")
-                global print_size
-
-                print("add_face(): p0 ", p0)
-                print("add_face(): p1 ", p1)
-                print("add_face(): p2 ", p2)
-                _print_object(self.V, print_size, "add_face()")  
-                print_size += 1
+                # global print_size
+                # _print_object(self.V, print_size, "add_face()")  
+                # print_size += 1
 
                 if self.nface > self.nF:   # nFace
                         print("add_face(): Internal error: out of faces in tesselate.")
@@ -476,7 +397,7 @@ class Dome:
 
                 # Find 3 vertices for the face
                 v0 = self.match_vtx(p0)
-                v1 = self.match_vtx(p1)
+                v1 = self.match_vtx(p1) 
                 v2 = self.match_vtx(p2)
 
                 # Add new Face object 
@@ -487,7 +408,6 @@ class Dome:
                 self.match_edge(v0, v1)
                 self.match_edge(v1, v2)
                 self.match_edge(v2, v0)
-                print("add_face():  END\n")
 
         def tesselate1(self, din, face):
                 """
@@ -504,6 +424,7 @@ class Dome:
                 v01f, v02f, v12f = ptMul(v01, frac), ptMul(v02, frac), ptMul(v12, frac)
 
                 if DEBUG:
+                        print("frac:", frac)
                         print("  p0:", p0) 
                         print("  p1:", p1)
                         print("  p2:", p2)
@@ -556,7 +477,7 @@ class Dome:
                                         self.add_face(n0, n2, n1)
                                 j += 1 # end of inner loop
 
-        def tesselate(self, inDome):
+        def tesselate(self, domesrc):
                 """
                  Subdivide a dome.  Previous values in output dome are freed.
 
@@ -568,7 +489,7 @@ class Dome:
 
                 # Number of faces 
                 # F = face_number * nu  
-                nf = inDome.nface * nu
+                nf = domesrc.nface * nu
 
                 # Number of edges 
                 ne = nf * 3
@@ -579,11 +500,11 @@ class Dome:
                 self.set_dimension(nv, ne, nf)
                 print("Py_tesselate(): V{}, E{}, F{}".format(self.nV,
                                                             self.nE, self.nF))
-                for i in range(inDome.nface):
-                        curFace = inDome.face(i)
+                for i in range(domesrc.nface):
+                        curFace = domesrc.face(i)
                         if DEBUG:
                                 print("Py_tesselate({}): {}".format(i, curFace))
-                        self.tesselate1(inDome, curFace)
+                        self.tesselate1(domesrc, curFace)
 
                 if DEBUG:
                         print("Py_tesselate(): nface {}, nedge {}, nvert {}".format(
@@ -594,13 +515,15 @@ class Dome:
                 return Point(*it)
 
         def __str__(self):
-                s0 = 'Dome:'
-                s1 = 'radius: {}\n'.format(self.radius)
-                s2 = 'vertices: {}\n'.format(self.nvert)
-                s3 = 'edges: {}\n'.format(self.nedge)
-                s4 = 'faces: {}\n'.format(self.nface)
-                s5 = s0 + s1 + s2 +  s3 + s4
-                return s5
+                s0 = 'Dome\n'
+                s1 = 'Decimal factor: {}\n'.format(self.decimal_factor)
+                s2 = 'Radius: {}\n'.format(self.radius)
+                s3 = 'Frequency: {}\n'.format(self.frq)
+                s4 = 'Vertices: {}\n'.format(self.nvert)
+                s5 = 'Edges: {}\n'.format(self.nedge)
+                s6 = 'Faces: {}\n'.format(self.nface)
+                text = s0 + s1 + s2 +  s3 + s4 + s5 + s6
+                return text 
         ## End of Dome 
 
 
@@ -651,86 +574,6 @@ def normalize_cmd(dome, radius, f):
         normalize_dome(dome, radius, f)
 
 
-# Save dome data in OpenSCAD file
-def write_dome2(dome, radius, filename):
-        stamp = get_title(PROGRAM, VERSION)
-
-        array_head = ["V = [\n", "E = [\n", "F = [\n"]
-        array_tail = "];\n\n"
-
-        of = open(filename, 'w')
-        of.write("// {}".format(stamp))
-        of.write("// Frequency: {}\n".format(dome.frq))
-        of.write("// Radius: {}\n".format(radius))
-
-        of.write("// Vertices: {}\n".format(dome.nvert))
-        of.write(array_head[0])
-        for i in range(dome.nvert):
-                v = dome.V[i]
-                if i == dome.nvert-1:
-                        of.write("\t[{0:9.6f}, {1:9.6f}, {2:9.6f}]  //{3:3d}\n".format(v.x, v.y, v.z, i))
-                else:
-                        of.write("\t[{0:9.6f}, {1:9.6f}, {2:9.6f}], //{3:3d}\n".format(v.x, v.y, v.z, i))
-        of.write(array_tail)
-
-        of.write("// Edges: {}\n".format(dome.nedge))
-        of.write(array_head[1])
-        for i in range(dome.nedge):
-                e = dome.E[i]
-                etype = e.name if e.name != None else "-"
-                if i == dome.nedge:
-                        of.write("\t[{0:2d}, {1:2d}, {2:9.6f}, \"{3}\"]  // {4:3d}\n".format(e.v0, e.v1, 
-                                                                                 e.length, etype, i))
-                else:
-                        of.write("\t[{0:2d}, {1:2d}, {2:9.6f}, \"{3}\"], // {4:3d}\n".format(e.v0, e.v1, 
-                                                                                 e.length, etype, i))
-        of.write(array_tail)
-
-        of.write("// Faces: {}\n".format(dome.nface))
-        of.write(array_head[2])
-        for i in range(dome.nface):
-                f = dome.F[i]
-                if i == dome.nface-1:
-                        of.write("\t[{0:2d}, {1:2d}, {2:2d}]  //{3:3d} \n".format(f.A, f.B, f.C, i))
-                else:
-                        of.write("\t[{0:2d}, {1:2d}, {2:2d}], //{3:3d} \n".format(f.A, f.B, f.C, i))
-        of.write(array_tail)
-        
-        of.close()
-
-
-def write_dome(dome, radius, filename):
-        """ 
-        Write out a dome file
-        Dome dome: Dome object 
-        string name: file name 
-        """
-        stamp = get_title() 
-
-        of  = open(filename, 'w')
-        of.write(stamp)
-        of.write("Frequency: {}\n".format(dome.frq))
-        of.write("Radius: {}\n".format(radius))
-
-        of.write("Vertices: {}\n".format(dome.nvert))
-
-        for i in range(dome.nvert):
-                v = dome.V[i]
-                of.write("{0:3d}: {1:9.6f}, {2:9.6f}, {3:9.6f}\n".format(i, v.x, v.y, v.z))
-    
-        of.write("\nEdges: {}\n\n".format(dome.nedge))
-        for i in range(dome.nedge):
-                e = dome.E[i]
-                of.write("{0:3d}: {1:2d}, {2:2d}, {3:f} {4}\n".format( i, e.v0, e.v1, 
-                                                e.length, e.name if e.name != None else '-')) 
-
-        of.write("\nFaces: {}\n\n".format(dome.nface))
-        for i in range(dome.nface):
-                f = dome.F[i]
-                of.write("{0:3d}: {1:2d}, {2:2d}, {3:2d}\n".format(i, f.A, f.B, f.C))
-        of.close()
-
-
 def tesselate_cmd(metric, radius, frq):
         """
         Initialize a tesselated dome.  Tesselate f0dome by the specified
@@ -741,14 +584,16 @@ def tesselate_cmd(metric, radius, frq):
         global f0dome
 
         adome = Dome(metric, radius, frq)
+        adome.set_df(5)
         adome.tesselate(f0dome)
         adome.scale(radius)
         adome.normalize()
+        print(adome)
 
         # Default file 
         fname  = "pydome.data"
         write_dome(adome, radius, fname)
-        write_dome2(adome, radius, "pydome.scad")
+        # write_dome2(adome, radius, "pydome.scad")
 
         # Sort vertices, edges, faces  
         svertices = sd.sort_vertices(adome.V)
@@ -759,10 +604,11 @@ def tesselate_cmd(metric, radius, frq):
         et = sd.EdgeTypes(sedges)
         et.process() 
         edgetypes = et.value()
+        print("Number of edge types: {}".format(len(edgetypes)))
         for i in edgetypes:
                 print(i)
 
-        sd.write_sdome_scad(svertices, sedges, sfaces, radius, frq, "pydome_sorted.scad")
+        sd.write_scad(svertices, sedges, sfaces, edgetypes, radius, frq, "pydome_sorted.scad")
 
 
 if __name__ == '__main__':
@@ -770,7 +616,7 @@ if __name__ == '__main__':
         # Radius 304.80 mm, frequency 3
         # tesselate_cmd(304.80, 3)
         
-        # Radius 20 mm, frequency 2
-        tesselate_cmd(True, 30.00, 4)
+        # metric, radius, frequeny
+        tesselate_cmd(True, 30.00, 2)
 
 

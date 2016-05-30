@@ -1,7 +1,9 @@
 # Python 3.4
 # domestruts.py 
+# Caculate strut types and bend angles of each strut type 
 
 from domemath import *
+from domefile import *
 
 # Need to change these for mm unit 
 margin = 0.75/12.0
@@ -78,12 +80,12 @@ def match_strut(a, b, at, lt):
         if b.length > a.length*l1 or b.length < a.length*l0:
                 return 0
 
-        if (b.a0 >= a.a0-at) and (b.a0 <= a.a0+at) and
-           (b.a1 >= a.a1-at) and (b.a1 <= a.a1+at):
+        if (b.a0 >= a.a0-at) and (b.a0 <= a.a0+at) and \
+                    (b.a1 >= a.a1-at) and (b.a1 <= a.a1+at):
                 return 1
 
-        if (b.a0 >= a.a1-at) and (b.a0 <= a.a1+at) and
-           (b.a1 >= a.a0-at) and (b.a1 <= a.a0+at):
+        if (b.a0 >= a.a1-at) and (b.a0 <= a.a1+at) and \
+                    (b.a1 >= a.a0-at) and (b.a1 <= a.a0+at):
                 return 0
 
         return 0
@@ -102,4 +104,36 @@ def compute_strut(vsrc, edge):
         return t 
 
 
+def process_struts():
+        import argparse as ap
+
+        parser = ap.ArgumentParser(prog="domestruts", epilog="See instructions for more details.")
+        parser.add_argument("dome_file", help="dome data file in OpenSCAD code")
+        parser.add_argument("output_file", help="store strut data")
+        parser.add_argument("-margin", default=1.60, type=float,
+                        help="specify margin beyond the bolt hole (1.60)")
+        parser.add_argument("-bl", default=1.60, type=float,
+                        help="specify length of bend (1.60)")
+        parser.add_argument("-at", default=2.0, type=float, 
+                        help="angle tolerance in degrees (2.0)")
+        parser.add_argument("-lt", default=0.1, type=float, 
+                        help="length tolerance in percent (0.1)")
+        parser.add_argument("-scale", default=1.0, type=float,
+                        help="specify scale factor (1.0)")
+        parser.add_argument("-cm", action="store_true", help="convert mm to cm unit")
+        args = parser.parse_args()
                 
+        ifilename = args.dome_file
+        ofilename = args.output_file
+        margin = args.margin
+        bend_length = args.bl
+        angle_tolerance = args.at
+        length_tolerance = args.lt
+        scale = args.scale
+        cm_unit = args.cm
+
+        read_dome(ifilename)
+
+if __name__ == '__main__':
+        process_struts()
+
