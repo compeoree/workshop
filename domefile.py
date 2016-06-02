@@ -2,65 +2,72 @@
 # domefile.py
 
 import re
-from domemath import fn6
-from pydome import *
+from domemath import *
+from pydome import * 
 
 VERTEX, EDGE, FACE = 0, 1, 2
 
-def re_search(src, i, pattern, is_single=True):
-        s = src[i]
+def re_search(src, pattern, is_single=True):
         if is_single:
-                m = re.search(pattern, s)
+                m = re.search(pattern, src)
                 return m.group()
         else:
-                m = re.findall(pattern, s)
+                m = re.findall(pattern, src)
                 return m
 
-def re_extract_list(start, size, pattern, list_type, is_float=True):
+# list_size = re_search(src[4], '\d+', is_single=True)
+def re_extract_list(src, pos, pattern, _type, is_float=True):
         tt = list()
+      
+        size = re_search(src[pos], '\d+', is_single=True)
+        start = pos + 2
         end = start + int(size)
-        for i in range(start, end):
-                x, y, z = re_search(lines, i, pattern, is_single=False)
-                item = [fn6(x), fn6(y), fn6(z)]
-                tt.append(item)
-        print("size of V", len(V))
+
+        if _type is VERTEX:
+                # [ 0.000000,  0.000000, 30.000000], //  0 0-0
+                for i in range(start, end):
+                        x, y, z = re_search(src[i], pattern, is_single=False)
+                        item = Point(x, y, z)
+                        tt.append(item)
+        elif _type is EDGE:
+                # [ 0,  1, 16.400000, "-"], //   0
+                # c takes the comment index 
+                for i in range(start, end):
+                        a, b, length, c = re_search(src[i], pattern, is_single=False)
+                        item = Edge(a, b, length)
+                        tt.append(item)
+        elif _type is FACE:
+                # [ 0, 1, 2], // 0 
+                # d takes the comment index 
+                for i in range(start, end):
+                        a, b, c, d = re_search(src[i], pattern, is_single=False)
+                        item = Face(a, b, c)
+                        tt.append(item)
+        return tt
 
 
 # Read OpenSCAD dome file 
 def read_dome(filename):
-        import re
-        
-
         ifile = open(filename, 'r')
+        src = ifile.readlines()
+        ifile.close() 
+        #line = line0.rstrip('\r\n')
 
-        lines = ifile.readlines()
-        ifile.close()
-        size = len(lines)
-        for i in range(size):
-                line0 = lines[i]
-                line = line0.rstrip('\r\n')
-                print(i, line)
+        line = src[0]
+        dome_stamp = line[2:]
+        frq = re_search(src[2], '\d+', is_single=True)
+        radius = re_search(src[3], '\d+\.\d+', is_single=True)
 
-        t = lines[0]
-        dome_stamp = t[2:]
+        pos = 4
+        V = re_extract_list(src, pos, '[-]?[0-9]+\.[0-9]+', VERTEX, is_float=True)
+
+        pos = pos + len(V) + 4
+        E = re_extract_list(src, pos, '[0-9]+\.?[0-9]*', EDGE, is_float=True)
         
-        frq = re_search(lines, 2, '\d+', is_single=True)
-        radius = re_search(lines, 3, '\d+\.\d+', is_single=True)
-        vnum = re_search(lines, 4, '\d+', is_single=True)
+        pos = pos + len(E) + 4
+        F = re_extract_list(src, pos, '[0-9]+\.?[0-9]*', FACE, is_float=True)
 
-        print(dome_stamp, frq, radius, vnum)
-
-        V = list()
-        start = 6
-        end = start + int(vnum)
-        for i in range(start, end):
-                x, y, z = re_search(lines, i, '[-]?\d+\.\d+', is_single=False)
-                print(i, ": ", x, y, z)
-                v = [fn6(x), fn6(y), fn6(z)]
-                V.append(v)
-        print("size of V", len(V))
-
-
+        return Dome(True, float(radius), int(frq), V, E, F)
 
 
 def write_dome(dome, radius, filename):

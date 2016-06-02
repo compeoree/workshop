@@ -32,72 +32,13 @@ VERSION = "0.1"
 PROGRAM = "pydome"
 DEBUG = True 
 
-# Sorted by quadrant order of Cartesian coordinate system 
-_icos_vert = [
-        [ 0.000000,  0.000000,  1.000000],  # 0
-
-        [ 0.894427,  0.000000 , 0.447214],  # 1
-        [ 0.276393,  0.850651,  0.447214],  # 2
-        [-0.723607,  0.525731,  0.447214],  # 3
-        [-0.723607, -0.525731,  0.447214],  # 4
-        [ 0.276393, -0.850651,  0.447214],  # 5
-
-        [ 0.723607,  0.525731, -0.447214],  # 6
-        [-0.276393,  0.850651, -0.447214],  # 7
-        [-0.894427,  0.000000, -0.447214],  # 8 
-        [-0.276393, -0.850651, -0.447214],  # 9
-        [ 0.723607, -0.525731, -0.447214],  # 10 
-
-        [ 0.000000,  0.000000, -1.000000]   # 11
-        ]
-
-
-# 30 edges 
-_icos_edge = [
-        [0, 1, 0., None],   [0, 2, 0., None],   [0, 3, 0., None],
-        [0, 4, 0., None],   [0, 5, 0., None],   [1, 2, 0., None],
-        [2, 3, 0., None],   [3, 4, 0., None],   [4, 5, 0., None],
-        [5, 1, 0., None],   [1, 10, 0., None],   [1, 6, 0., None],
-        [2, 6, 0., None],  [2, 7, 0., None],  [3, 7, 0., None],
-        [3, 8, 0., None],   [4, 8, 0., None],   [4, 9, 0., None],
-        [5, 9, 0., None],   [5, 10, 0., None],   [10, 6, 0., None],
-        [6, 7, 0., None],   [7, 8, 0., None],   [8, 9, 0., None],
-        [9, 10, 0., None],  [11, 6, 0., None],  [11, 7, 0., None],
-        [11, 8, 0., None],  [11, 9, 0., None], [11, 10, 0., None]
-        ]
-
-# 20 faces 
-_icos_face = [ 
-        [0, 1, 2],
-        [0, 2, 3],
-        [0, 3, 4],
-        [0, 4, 5],
-        [0, 5, 1],
-        [1, 2, 6],
-        [2, 6, 7],
-        [2, 3, 7],
-        [3, 7, 8],
-        [3, 4, 8],
-        [4, 8, 9],
-        [4, 5, 9],
-        [5, 9, 10],
-        [5, 1, 10],
-        [1, 6, 10],
-        [11, 6, 7],
-        [11, 7, 8],
-        [11, 8, 9],
-        [11, 9, 10],
-        [11, 10, 6]
-        ]
-
 global f0dome, tdome, Vv
 
 # Number of objects to print in _print_object() 
 global print_size 
-
 print_size = 8
 
-def _print_object(obj, size=0, header="_print_object()"):
+def print_object(obj, size=0, header="_print_object()"):
         start, end = 0, len(obj)
         if end > 0: 
                 if size == 0:
@@ -106,91 +47,12 @@ def _print_object(obj, size=0, header="_print_object()"):
                         start = end - size 
                 print("{}: {} to {}".format((header), start, end))
                 for i in range(start, end):
-                        print(i, obj[i])
+                        print(obj[i], "//", i)
         else:
                 print("{}: {}".format(header, "Empty container!!"))
 
 
-def normalize_vertex(vtx, r, frac):
-        """
-        Normalize a vertex so it has a specified radius from the center.
-        Point vtx: a vertex 
-        float r: radius of the sphere 
-        float frac
-        """
-        frac1 = 1.0 - frac
-        l = vlen(vtx)
-        if l > 0.0 and frac > 0.0:
-                l = frac/l + frac1
-                l *= r
-                x = vtx.x * l
-                y = vtx.y * l
-                z = vtx.z * l
-                return Point(x, y, z)
-
-
-class Edge:
-        """ 
-        Edge has two vertices, length, name.
-                Default length unit is mm, decimal point to two.
-        """
-        def __init__(self, v0=0, v1=0):
-                self.v0 = int(v0)
-                self.v1 = int(v1)
-                self.length = None
-                self.name = '-' 
-
-        def set_length(self, val, metric):
-                self.length = fn6(val, 2) if metric is True else fn6(val, 4) 
-
-        def set_name(self, edgetype):
-                self.name = edgetype 
-
-        def value(self):
-                return self.v0, self.v1, self.length, self.name 
-
-        def __str__(self):
-                if self.length is None:
-                        return 'Edge<{0}, {1}>'.format(self.v0, self.v1)
-                else:
-                        return 'Edge<{0}, {1}, {2:9.6f}, {3}>'.format(self.v0, self.v1, 
-                                                    self.length, self.name)
-
-class Face:
-        """ Face has three vertices: A, B, C """
-
-        def __init__(self, a=0, b=0, c=0):
-                self.A = int(a)
-                self.B = int(b)
-                self.C = int(c)
-
-        def set_(self, a, b, c):
-                self.A = int(a)
-                self.B = int(b)
-                self.C = int(c)
-
-        def value(self):
-                return self.A, self.B, self.C 
-
-        def __str__(self):
-                return 'Face<{}, {}, {}>'.format(self.A, self.B, self.C)
-
-
-# Vertex
-class Vertex0:
-        SZ = 6  # size of integer array (list) 
-        def __init__(self, v1, n1, edgelist1):
-                self.vtx = v1
-                self.nedge = n1
-                self.edges = deepcopy(edgelist1)
-
-        def __str__(self):
-                s1 = 'Vertex <{0}, {1} '.format(self.vtx, self.nedge)
-                s2 = str(self.edges)
-                return s1+s2 
-
-
-def _Dome_init_helper(lst):
+def Dome_helper(lst):
         if lst is None:
                 return list(), 0
         else:
@@ -200,12 +62,12 @@ def _Dome_init_helper(lst):
 class Dome:
         def __init__(self, metric=True, r=10.0, nu=2, vertexlist=None, edgelist=None,
                         facelist=None):
-                self.decimal_factor = 6 
+                self.decimal_factor = 5 
 
                 self.metric, self.radius, self.frq = metric, r, nu 
-                self.V, self.nvert = _Dome_init_helper(vertexlist)
-                self.E, self.nedge = _Dome_init_helper(edgelist)
-                self.F, self.nface = _Dome_init_helper(facelist)
+                self.V, self.nvert = Dome_helper(vertexlist)
+                self.E, self.nedge = Dome_helper(edgelist)
+                self.F, self.nface = Dome_helper(facelist)
        
                 # total number of verticies, edges, and faces 
                 self.nV, self.nE, self.nF = 0, 0, 0 
@@ -240,6 +102,16 @@ class Dome:
                 self.nface = len(self.F) 
                 print("__ add_face(): {} <{}, {}, {}>".format(self.nface-1, 
                                                     t.A, t.B, t.C))
+        # Initialize vertices 
+        def init_vertices(self):
+                buf = list()
+                for v in self.V:
+                        x, y, z = v
+                        buf.append(Point(x, y, z))
+                del self.V[:]
+                self.V = deepcopy(buf)
+                del buf[:]
+
 
         # Return i-th Point in self.V 
         def vertex(self, i):
@@ -553,16 +425,16 @@ def init_array(src_arr, obj_type, del_num):
 
 
 # Create array of Point objects 
-icos_vert = init_array(_icos_vert, Point, 1)
+icos_vert_ = init_array(icos_vert, Point, 1)
 
 # Create array of Edge objects
-icos_edge = init_array(_icos_edge, Edge, 5)
+icos_edge_ = init_array(icos_edge, Edge, 5)
 
 # Create array of Face objects
-icos_face = init_array(_icos_face, Face, 5)
+icos_face_ = init_array(icos_face, Face, 5)
 
 # Unit (Icosahedron) dome of radius 1.0 
-f0dome = Dome(True, 1.0, 1, icos_vert, icos_edge, icos_face)
+f0dome = Dome(True, 1.0, 1, icos_vert_, icos_edge_, icos_face_)
 
 def normalize_cmd(dome, radius, f):
         """
