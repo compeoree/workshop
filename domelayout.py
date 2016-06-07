@@ -53,6 +53,8 @@ def adjust_edge(p0, p1, len_):
 
 def draw_edge(ofile, dome, edge, is_explode, is_color):
         global g
+        sx, sy = g.sx, g.sy
+        tx, ty = g.tx, g.ty
 
         _p0 = dome.vertex(edge.v0)
         _p1 = dome.vertex(edge.v1)
@@ -68,25 +70,24 @@ def draw_edge(ofile, dome, edge, is_explode, is_color):
                 p0, p1 = adjust_edge(p0, p1, edge.length) # WIP
 
         # Convert to postscript coordinates 
-        p0.x = p0.x*g.sx + g.tx
-        p0.y = p0.y*g.sy + g.ty
-        p1.x = p1.x*g.sx + g.tx
-        p1.y = p1.y*g.sy + g.ty
+        p0.x = fn6(p0.x*sx + tx, 2)
+        p0.y = fn6(p0.y*sy + ty, 2)
+        p1.x = fn6(p1.x*sx + tx, 2) 
+        p1.y = fn6(p1.y*sy + ty, 2)
 
         ofile.write("%% strut {}\n".format(edge.name))
         # Select one out of 9 colors
         if is_color:
                 c = int(edge.name[1:]) - int(g.c0[1:])     
                 clr = get_color(c)
-                r, g, b = clr.rgb()
-                ofile.write("{} {} {} setrgbcolor\n".format(r, g, b))
-        ofile.write("newpath {} {} moveto {} {} lineto stroke\n".format(
-                                p0.x, p0.y, p1.x, p1.y))
+                red, green, blue = clr.rgb()
+                ofile.write("{} {} {} setrgbcolor\n".format(red, green, blue))
+        ofile.write("newpath {:.2f} {:.2f} moveto {:.2f} {:.2f} lineto stroke\n".format(p0.x, p0.y, p1.x, p1.y))
         if is_color:
                 ofile.write("0 setgray\n")
 
-        lx = (p0.x + p1.x)/2
-        ly = (p0.y + p1.y)/2
+        lx = fn6((p0.x + p1.x)/2, 2)
+        ly = fn6((p0.y + p1.y)/2, 2)
         ofile.write("{} {} moveto ({}) ctrTxt\n\n".format(lx, ly, edge.name))
 
 
