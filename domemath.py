@@ -87,10 +87,10 @@ def MAX(a, b):
 # o is the angle between the unit point on x axis and a point (x, y)
 #
 class Point:
-        def __init__(self, x=0, y=0, z=0):
-                self.x = fn6(x)
-                self.y = fn6(y)
-                self.z = fn6(z)
+        def __init__(self, x=0, y=0, z=0, prec=6):
+                self.x = fn6(x, prec)
+                self.y = fn6(y, prec)
+                self.z = fn6(z, prec)
                 self.ix = int(self.x)
                 self.iy = int(self.y)
                 self.iz = int(self.z)
@@ -102,6 +102,9 @@ class Point:
 
         def xyz(self):
                 return self.x, self.y, self.z 
+
+        def pt(self):
+                return Point(self.x, self.y, self.z)
 
         def __str__(self):
                 return 'Point<{0:9.6f}, {1:9.6f}, {2:9.6f}>'.format(
@@ -226,6 +229,13 @@ def find_vertex0(target, vsrc,  prec=6):
         return -1
 
 # New version 
+'''
+Duplicate vertices 
+prec = 5: 
+ [20.645694, -15.000026, 15.771953], //  7 2-1
+ [20.645725, -14.999988, 15.771950], //  8 2-2
+
+'''
 def find_vertex1(target, vsrc, prec=5):
         Mx = 10 ** prec
         x = int(Mx * target.x) 
@@ -254,6 +264,50 @@ def crossprod(a, b):
         y = a.z*b.x - a.x*b.z
         z = a.x*b.y - a.y*b.x
         return Point(fn6(x), fn6(y), fn6(z))
+
+
+def bend_angle(a, b):
+        """
+        Form two vectors: a (A to origin), b (A to B).
+              + B | 
+               \  | 
+                \ |
+                 \| 
+        O+--------+ A
+
+        Oa = Ob = radius 
+        Return angle (90.0 - Oab) is ##.##  
+
+        """
+        v0, v1 = Point(-a.x, -a.y, -a.z), Point()
+        len0 = vlen(v0)
+        if len0 == 0.0:
+                return 0.0
+
+        len0 = 1.0 / len0
+        v0.x *= len0
+        v0.y *= len0
+        v0.z *= len0
+
+        v1.x = b.x - a.x
+        v1.y = b.y - a.y
+        v1.z = b.z - a.z
+        len1 = vlen(v1)
+        if len1 == 0.0:
+                return 0.0
+
+        len1 = 1.0 / len1
+        v1.x *= len1
+        v1.y *= len1
+        v1.z *= len1
+
+        x_ = dotprod(v0, v1)
+        rad = m.acos(x_)
+        theta = 90.0 - m.degrees(rad)
+
+        return fn6(theta, 2)
+
+
 
 
 def calculate_angle(x1, y1, x=1.0, y=0.0):

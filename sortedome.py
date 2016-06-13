@@ -335,10 +335,10 @@ def process_sorted_dome(vertices, edges, faces):
 
 
 #
-# Create hub datatype to model 3D parts in OpenSCAD.  
+# Hub is basic data type to create 3D hub model.  
 #
 # Outer vertices and one center vertex forms one hub
-# Each spoke, i.e 0-1, has bend angle. 
+# Each spoke, i.e 0-1, has one bend angle. 
 #
 #            2 
 #                  
@@ -352,28 +352,31 @@ def process_sorted_dome(vertices, edges, faces):
 #
 class Hub:
         """  index: center vertex 
-          vertices: list of outer vertices 
+          vsrc1: list of outer vertices 
+          vsrc2: list of Point objects 
           index = 0 
           Spoke = [1, 2, 3, 4, 5]
           It forms len(vertices), i.e. 5 spokes. 
 
         """
-        def __init__(self, index, vertices):
+        def __init__(self, index, vsrc1, vsrc2):
+                self.V = vsrc2
                 self.index = index
-                self.Spoke = vertices
+                self.Spoke = vsrc1
                 self.Angle = dict()
-                self.radius = None
                 self.angle_info = ''
                 self.lable = ''
 
-        # key = other vertex 
+        # The keys are spokes. 
         def compute_bend_angle(self):
-                x, y, z = V[self.index]
-                a = Point(x, y, z)
+                #x, y, z = self.V[self.index]
+                # a = Point(x, y, z)
+                a = self.V[self.index].pt()
                 for i in self.Spoke:
                         key = i 
-                        x, y, z = V[i]
-                        b = Point(x, y, z)
+                        # x1, y1, z1 = self.V[i]
+                        # b = Point(x1, y1, z1)
+                        b = self.V[i].pt()
                         self.Angle[key] = bend_angle(a, b) 
 
         def set_angle_info(self, types):
@@ -391,17 +394,86 @@ class Hub:
                                 return lable
                 print("get_lable(): {} is failed.".format(key))
                 return ''
+
+        def __str__(self):
+                s1 = str(self.index)
+                s2 = str(self.Spoke)
+                s3 = str(self.Angle)
+                s4 = self.angle_info
+                s5 = self.lable
+                body = '{}, {} \n {} \n {} \n {}'.format(s1, s2, s3, s4, s5)
+
+                return 'Hub<{}>'.format(body)
+
+
 ## Hub 
+
+# 
+#  The hub has 3 to 6 angles firmed by spokes. 
+#  Each spoke match to unique vector created by two vertices.
+#  Below example hub has 6 spokes:
+#  vector(0, 1), vector(1, 2), vector(1, 5), 
+#  vector(1, 6), vector(1, 10), vector(1, 11).
+#  The vectors make 6 acute angles. 
+#       6
+#  2        11
+#       1
+#  0        10
+#       5
+#
+class Hub3D:
+        ''' Contain data to create 3D hub part in OpenSCAD '''
+        # hub: Hub object  
+        def __init__(self, hub, radius):
+                self.hub = hub
+                self.radius = radius 
+                self.Vector = self.compute_vectors()
+                self.AcuteAngle = list() 
+
+        def compute_vectors(self):
+                ''' Create vectors '''
+                h = self.hub
+                i = h.index
+                a = h.V[i].pt()         # Center of the hub
+
+                t = list()
+                for j in h.Spoke:
+                        b = h.V[j].pt()       
+                        vec = pt_vector(a, b)
+                        item = (vec, (i, j))
+                        t.append(item)
+                
+                return t
+
+        def compute_acute_angles(self):
+                pass
+## 3DHub 
+
 
 class HubLable:
         """ Store hub lables """
         def __init__(self, vsrc, fsrc):
-                self.Hub = self.generate_hubs(vsrc, fsrc)
+                self.V = self.generate_vertices(vsrc)
+        #       self.Hub = self.generate_hubs(vsrc, fsrc)
+                self.Hub = self.generate_hubs(self.V, fsrc)
                 self.Angle_type = self.get_angle_types()
                 self.Lable_type = self.get_lable_types()
 
+        def generate_vertices(self, vsrc):
+                ''' list of Point objects '''
+                t = list()
+                for i in range(len(vsrc)):
+                        x, y, z = vsrc[i]
+                        p = Point(x, y, z, prec=3)
+                        t.append(p)
+                
+                return t
+
         # Prepare basic hubs using faces 
         def create_hub(self, x, faces):
+                ''' x: target vertex 
+                    faces: list of faces [v0, v1, v2], ... 
+                '''
                 flist = list()
                 for f in faces:
                         a, b, c = f
@@ -419,9 +491,9 @@ class HubLable:
         def generate_hubs(self, vsrc, fsrc):
                 # buf for debugging 
                 _hub, buf = list(), list()
-                vertex = [x for x in range(len(vsrc))]
-                for v in vertex:
-                        h, b = self.create_hub(v, fsrc)
+                indices = [x for x in range(len(vsrc))]
+                for i in indices:
+                        h, b = self.create_hub(i, fsrc)
                         _hub.append(h)
                         buf.append(b)
 
@@ -434,7 +506,7 @@ class HubLable:
               
                 hbag = list()
                 for key, val in _hub2.items():
-                        h = Hub(key, val)
+                        h = Hub(key, val, vsrc)
                         h.compute_bend_angle()
                         hbag.append(h)
 
