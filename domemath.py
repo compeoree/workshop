@@ -183,12 +183,12 @@ def pt_vector(a, b):
         
 
 # Return the distance between two Points 
-def ptDist(a, b):
+def ptDist(a, b, prec=6):
         dx = a.x - b.x
         dy = a.y - b.y
         dz = a.z - b.z
         d = m.sqrt(dx*dx + dy*dy + dz*dz)
-        return fn6(d)
+        return fn6(d, prec)
 
 
 # Add two Points 
@@ -253,20 +253,28 @@ def find_vertex1(target, vsrc, prec=5):
         return -1
 
 # Dot product of two vectors
-def dotprod(a, b):
-        v = a.x*b.x + a.y*b.y + a.z*b.z
-        return fn6(v)
+def dotprod(a, b, prec=3):
+        x = a.x*b.x + a.y*b.y + a.z*b.z
+        return fn6(x, prec)
 
 
 # Cross product of two vectors
-def crossprod(a, b):
+def crossprod(a, b, prec=3):
         x = a.y*b.z - a.z*b.y
         y = a.z*b.x - a.x*b.z
         z = a.x*b.y - a.y*b.x
-        return Point(fn6(x), fn6(y), fn6(z))
+        return Point(x, y, z, prec)
 
 
-def bend_angle(a, b):
+def vlen(v):
+        """ 
+        Point v: 
+        Return the length between v and the origin (0.0, 0.0, 0.0). 
+        """
+        d = m.sqrt(v.x*v.x + v.y*v.y + v.z*v.z)
+        return fn6(d)
+
+def bend_angle(a, b, prec=2):
         """
         Form two vectors: a (A to origin), b (A to B).
               + B | 
@@ -305,10 +313,45 @@ def bend_angle(a, b):
         rad = m.acos(x_)
         theta = 90.0 - m.degrees(rad)
 
-        return fn6(theta, 2)
+        return fn6(theta, prec)
 
+# Alternative method 
+#  a   m   b
+#   \  |  /
+#    \ | /  
+#     \|/
+#      +
+#      O
+#
+# Oam and Obm are right angle triangles
+# angle_aOm = 1/2 * angle_aOb
+# angle_aOb = theta
+# vector(O,a) = vec_a 
+# vec_a dot vec_b = |vec_a||vec_b|cos(theta)
+#
+#               vec_a dot vec_b
+# theta = acos( --------------- ) 
+#               |vec_a||vec_b|
+#
+# angle_Oamm = 90.0 - 1/2*theta 
+#
+# bend angle = 90.0 - angle_Oam 
+#            = 90.0 - (90 - 1/2*theta)
+#            = (1/2)*theta
+#
+def bend_angle2(a, b, prec=2):
+        '''
+        bend_angle = (1/2)*theta
+        '''
+        dp = dotprod(a, b)
+        len_a = vlen(a)
+        len_b = vlen(b)
+        x = dp/(len_a * len_b)
+        rad = m.acos(x)
+        theta = m.degrees(rad)
+        ang = (1/2)*theta 
 
-
+        return fn6(ang, prec)
 
 def calculate_angle(x1, y1, x=1.0, y=0.0):
         """
@@ -350,13 +393,18 @@ def calculate_angle(x1, y1, x=1.0, y=0.0):
                 return 360.0 - _ang
 
 
-def vlen(v):
-        """ 
-        Point v: 
-        Return the length between v and the origin. 
-        """
-        d = m.sqrt(v.x*v.x + v.y*v.y + v.z*v.z)
-        return fn6(d)
+def vector_angle(a, b):
+        ''' a and b are Point objects '''
+        adotb = dotprod(a, b)
+        ma = m.sqrt(a.x*a.x + a.y*a.y + a.z*a.z)
+        mb = m.sqrt(b.x*b.x + b.y*b.y + b.z*b.z)
+        val = adotb / (ma * mb)
+        rad = m.cos(val)
+        _ang = m.degrees(rad)
+
+        return fn6(_ang, prec=2)
+
+
 
 
 

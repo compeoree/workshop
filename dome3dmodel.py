@@ -215,14 +215,298 @@ ET = [
 
 from sortedome import *
 
-hl = HubLable(V, F)
-for i in range(0, 3):
-        print(i, hl.Hub[i])
+global max_dst
 
-a = hl.Hub[0]
-a3d = Hub3D(a, 5)
-a3d.compute_vectors()
+# Unique Vertex
+class UniqueVertex:
+        ''' It contains all 3-dimensional information to build hub model.
+                p: Point(x, y, z) 
+                level: a level that contains the vertices which have the same
+                     height 
+                level_size: number of vertices in a level 
+                rid: index of the vertex in a level  
+                uid: unique index of each vertex 
+        '''
+        Level = None   # VertexLevel object 
 
-for v in a3d.Vector:
-        print(v[0], v[1])
+        def __init__(self, pt, uid, rid, level, level_size):
+                self.uid = uid
+                self.point = pt
+                self.level = level
+                self.level_size = level_size
+                self.rid = rid 
+
+        def get_uid(self, level, level_size, rid):
+                pass
+
+        def __str__(self):
+                x, y, z = self.point.xyz()
+                pt = '({}, {}, {})'.format(x, y, z) 
+                text = 'uVertex<{}, {}, {}, {}, {}>'.format(
+                                self.uid,
+                                self.rid,
+                                self.level,
+                                self.level_size,
+                                pt)
+                return text
+
+#
+# Frequency 2, 36 vertices  
+#
+# 0 [0]
+# 1 [1, 2, 3, 4, 5]
+# 2 [6, 7, 8, 9, 10]
+# 3 [11, 12, 13, 14, 15]
+# 4 [16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
+# 5 [26, 27, 28, 29, 30]
+# 6 [31, 32, 33, 34, 35]
+#
+# The layout of vertices in 2nd and 3rd level on XY plane
+#
+#     7     2     6
+#                 
+#      3    0   1
+#   8              10 
+#        4     5
+#            
+#           9
+#
+class VertexLevel:
+        ''' Store indices of ordered vertices by equal height 
+                Level: dictionary  
+        '''
+
+        def __init__(self, vsrc):
+                self.Level = self.create_levels(vsrc) 
+                self.size = len(self.Level)
+                self.uVertex = self.generate_uvertex(vsrc) 
+
+        #  [   0.000,    0.000,   30.000], #  0 0-0
+        def create_levels(self, vsrc):
+                tt, t, i = list(), list(), 0
+                level = 0
+                oldz = vsrc[0][2] 
+                for i in range(len(vsrc)):
+                        _curr = vsrc[i]
+                        currz = _curr[-1]
+                        index = i 
+                        if oldz != currz:
+                                level += 1
+                                tt.append(t[:])
+                                del t[:]
+                        t.append(index)
+                        oldz = currz
+                tt.append(t[:])         # last element 
+
+                d = dict()
+                for i in range(len(tt)):
+                        key = i
+                        val = tt[i]     # a level 
+                        d[key] = val 
+                del t[:], tt[:]
+
+                return d 
+
+        def get_level(self, pos):
+                if pos in self.Level.keys():
+                        return self.Level[pos]
+
+        def show(self):
+                print('{} levels'.format(self.size))
+                print('key size  data')
+                print('--------------')
+                for key, val in self.Level.items():
+                        print('{:3d}  {:3d}  {}'.format(key, len(val), val))
+
+        def get_rid(self, uid):
+                ''' uid: Unique index 
+                    Return triple: rid, level, size
+                        rid: relative id of the vertex in a level
+                        level: the level number 
+                        size: size of the level
+                '''
+                i, pos, size, found = 0, 0, 0, False
+                rid = 0
+                while i < self.size and not found:
+                        tmp = self.get_level(i)
+                        j, size = 0, len(tmp)
+                        while j < size:
+                                if uid == pos:
+                                        found = True
+                                        rid = j
+                                        break
+                                else:
+                                        pos += 1
+                                j += 1
+                        i += 1 
+
+                level = 0 if i is 0 else i-1 
+                ECHO('uid: {}, pos: {}'.format(uid, pos), False)
+                ECHO('level: {}, rid: {}, size: {}'.format(level, rid, size),
+                                False)
+                return rid, level, size
+       
+        def uvertex(self, uid, triple):
+                x, y, z = triple
+                p = Point(x, y, z, prec=3)
+                rid, l, sz = self.get_rid(uid)
+                return UniqueVertex(p, uid, rid, l, sz)
+
+        def generate_uvertex(self, vsrc):
+                t = list()
+                for uid in range(len(vsrc)):
+                        uv = self.uvertex(uid, vsrc[uid])
+                        t.append(uv)
+
+                return t 
+
+#
+# Hub is basic data type to create 3D hub model.  
+# A hub contains vectors that represent spokes, bend angles, and acute angles.
+#
+# Outer vertices and one center vertex forms one hub
+# Each spoke, i.e 0-1, has one bend angle. 
+#
+# First hub whose uid is 0:  
+# vector(0, 1), vector(0, 2), vector(0, 3)
+# vector(0, 4), vector(0, 5)
+#
+#            2 
+#                  
+#                  
+#     3             1  
+#            0     
+# 
+#      
+#       4         5 
+#
+#
+# A hub has 3 to 6 acute angles firmed by spokes. 
+# Each spoke maps to unique vector created by two vertices.
+# Below is the 2nd hub, has 6 spokes:
+# vector(1, 0), vector(1, 2), vector(1, 5), 
+# vector(1, 6), vector(1, 10), vector(1, 11).
+# These vectors firm 6 acute angles. 
+# angle_0: vector(1, 0), vector(1, 2)
+# angle_1: vector(1, 2), vector(1, 6) 
+# angle_2: vector(1, 6), vector(1, 11)
+# angle_3: vector(1, 11), vector(1, 10)
+# angle_4: vector(1, 10), vector(1, 5)
+# angle_5: vector(1, 5), vector(1, 0)
+#
+#       6
+#  2        11
+#       1
+#  0        10
+#       5
+#
+
+class Hub:
+        ''' uid: unique index of the center vertice 
+            spokes: indices of the outer vertices in list 
+        '''
+        def __init__(self, uid, spokes):
+                self.uid = uid          # center 
+                self.Spoke = spokes 
+
+
+#ET = [
+#        [16.4, 1, 1, 0, 0, 50], #0 
+#        [18.54, 2, 0, 1, 0, 45] #1 
+#        ]
+def max_distance(esrc):
+        ''' Find maxium distance '''
+        t = list()
+        for i in range(len(esrc)):
+                d = esrc[i][0]
+                t.append(d)
+        t.sort()
+
+        # last item is the biggest  
+        return t[-1]  
+
+# How to calculate the range of vertices in a level? 
+def get_all_vertices(index, level, uV):
+        if type(level) is type([]):
+                start = level[0]
+                end = level[-1]
+                ECHO("get_all_vertices():{}-({}, {})".format(index, start,
+                                        end), False)
+                end += 1
+                return uV[start:end]
+
+                
+# targets are keys 
+# L is dictionary 
+def find_ajacent_vertex(uid, targets, L, uV):
+        global max_dst
+
+        center = uV[uid]
+        others = list()
+
+        # Create one list 
+        for key in targets:
+                row = get_all_vertices(key, L[key], uV)
+                others.extend(row)                        
+
+        # Find 4 to 6 ajacent vertices 
+        av = list()
+        # limit = max_dst * 1.5
+        for v in others:
+                d = ptDist(center.point, v.point, prec=2)
+                if d <= max_dst:
+                        print('\t[{}]: {} vs {}'.format(v.uid, d, max_dst))
+                        av.append(v)
+        av.remove(center)
+
+        print('Center vertex is {}'.format(uid))
+        print('Ajacent vertices: ') 
+        for v in av:
+                print(v.uid, end=' ')
+
+
+def create_hub(uid, L, uV):
+        spk = list() 
+        targets = list()
+        the_end = len(L) - 1
+
+        # Find the level that contains uid
+        for it in uV:
+                if uid is it.uid:
+                       curr = it.level
+                       break
+
+        # Exclusive two levels: top and bottom 
+        if curr is 0:
+                targets.append(curr)
+                targets.append(curr+1)
+        elif curr is the_end:
+                targets.append(curr-2)
+                targets.append(curr-1)
+                targets.append(curr)
+        else:
+                if curr-2 > 0:
+                        targets.append(curr-2)
+                targets.append(curr-1)
+                targets.append(curr)
+                targets.append(curr+1)
+                if curr+2 <= the_end:
+                        targets.append(curr+2)
+         
+        # Find ajacent vertices 
+        find_ajacent_vertex(uid, targets, L, uV)
+
+# bend_angle(), bend_angle2() 
+# a, b: UniqueVertex objects
+def test_func(a, b):
+        a1 = bend_angle(a.point, b.point)
+        a2 = bend_angle2(a.point, b.point)
+        print('bend_angle(): ', a1)
+        print('bend_angle2(): ', a2)
+
+        
+        
+max_dst = max_distance(ET)
+vL = VertexLevel(V)
+
 
