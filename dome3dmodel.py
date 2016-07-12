@@ -3,7 +3,7 @@
 
 # Frequency: 2
 # Radius: 30.0
-#Vertices: 36
+#Vertices: 36 [x, y, z] 
 V = [
 	[   0.000,    0.000,   30.000], #  0 0-0
 	[  15.772,    0.000,   25.520], #  1 1-0
@@ -221,11 +221,10 @@ global max_dst
 class UniqueVertex:
         ''' It contains all 3-dimensional information to build hub model.
                 p: Point(x, y, z) 
-                level: a level that contains the vertices which have the same
-                     height 
+                level: a level that contains vertices which have equal height 
                 level_size: number of vertices in a level 
                 rid: index of the vertex in a level  
-                uid: unique index of each vertex 
+                uid: unique index of vertex 
         '''
         Level = None   # VertexLevel object 
 
@@ -361,13 +360,13 @@ class VertexLevel:
                 return t 
 
 #
-# Hub is basic data type to create 3D hub model.  
-# A hub contains vectors that represent spokes, bend angles, and acute angles.
+# Hub is basic data type to create a 3D model.  
+# It contains vectors that represent spokes, bend angles, and acute angles.
 #
 # Outer vertices and one center vertex forms one hub
 # Each spoke, i.e 0-1, has one bend angle. 
 #
-# First hub whose uid is 0:  
+# The first hub whose uid is 0:  
 # vector(0, 1), vector(0, 2), vector(0, 3)
 # vector(0, 4), vector(0, 5)
 #
@@ -381,12 +380,14 @@ class VertexLevel:
 #       4         5 
 #
 #
-# A hub has 3 to 6 acute angles firmed by spokes. 
-# Each spoke maps to unique vector created by two vertices.
-# Below is the 2nd hub, has 6 spokes:
+# A hub has 3 to 6 acute angles formed by two ajacent spokes. 
+# Each spoke maps to unique vectors paired with center and an outer vertex.
+# Below is the 2nd hub, which has 6 spokes:
+#
 # vector(1, 0), vector(1, 2), vector(1, 5), 
 # vector(1, 6), vector(1, 10), vector(1, 11).
-# These vectors firm 6 acute angles. 
+#
+# These vectors form 6 acute angles. 
 # angle_0: vector(1, 0), vector(1, 2)
 # angle_1: vector(1, 2), vector(1, 6) 
 # angle_2: vector(1, 6), vector(1, 11)
@@ -400,15 +401,42 @@ class VertexLevel:
 #  0        10
 #       5
 #
-
 class Hub:
-        ''' uid: unique index of the center vertice 
-            spokes: indices of the outer vertices in list 
+        ''' uid: unique index of the center vertex
+            center: center vertex
+            spokes: outer vertices  
         '''
-        def __init__(self, uid, spokes):
-                self.uid = uid          # center 
+        def __init__(self, center, spokes):
+                self.uid = center.uid          # center 
+                self.center = center
                 self.Spoke = spokes 
 
+        # Show only indices 
+        def show(self):
+                s1 = '{}: '.format(self.uid)
+                s2 = ''
+                for it in self.Spoke:
+                        s2 += '{} '.format(it.uid)
+                print(s1 + s2)
+
+        # Show vertices 
+        def deepshow(self):
+                print('Hub<{}: {}>'.format(self.uid, str(self.center)))
+                for it in self.Spoke:
+                        print('\t {}'.format(str(it)))
+
+        # Rotate the vertices to the top position  
+        def process(self):
+                # Get spherical coordinate of the center vertex 
+                r, theta, phi = get_sph_coordinate(self.center.point)
+                
+                tcenter = RzRy(phi, theta, self.center.point)
+                print(self.uid, str(tcenter))
+                tspokes = list()
+                for it in self.Spoke:
+                        tvec = RzRy(phi, theta, it.point)
+                        tspokes.append((it.uid, tvec))
+                        print(it.uid, str(tvec))
 
 #ET = [
 #        [16.4, 1, 1, 0, 0, 50], #0 
@@ -436,9 +464,10 @@ def get_all_vertices(index, level, uV):
                 return uV[start:end]
 
                 
-# targets are keys 
+# targets are the keys 
 # L is dictionary 
 def find_ajacent_vertex(uid, targets, L, uV):
+        _oo = False
         global max_dst
 
         center = uV[uid]
@@ -455,18 +484,93 @@ def find_ajacent_vertex(uid, targets, L, uV):
         for v in others:
                 d = ptDist(center.point, v.point, prec=2)
                 if d <= max_dst:
-                        print('\t[{}]: {} vs {}'.format(v.uid, d, max_dst))
+                        ECHO('\t[{}]: {} vs {}'.format(v.uid, d, max_dst),
+                                        _oo)
                         av.append(v)
         av.remove(center)
 
-        print('Center vertex is {}'.format(uid))
-        print('Ajacent vertices: ') 
-        for v in av:
-                print(v.uid, end=' ')
+        return av
 
+#
+#  Triangle ABC has a right angle at C.
+#
+#   A
+#   +
+#   |        c
+# b |
+#   |
+# C +-----------------+ B
+#   .        a
+#   .
+#   |
+# O +
+#
+#  OA = OB = r (radius)
+#  AB = c (hypotenuse)
+#  
+#  b = c cos(angle_A)
+#  a = c sin(angle_A)
+#
+#   
+#  vector(C, B) lays on a plane that vector(C, A) is normal to it.
+#  Use vector(C, B) to sort other vertices by the angle formula. 
+#
+#  CA
+# ---- = scale_factor_1 
+#  OA 
+#
+#  OC     OA - CA     r-b         b
+# ---- = --------- = ----- = 1 - --- 
+#  OA        OA        r          r
+#
+# OC = (1 - b/r) * OA
+#
+# C = (1 - b/r) * A 
+#    
+# Let f = (1 - b/r) 
+# C = f*A
+#
+# C = (f*A.x, f*A.y, f*A.z). 
+# 
+def find_point_on_plane(A, B):
+        ''' 
+            A and B are Point objects.
+            A: uid
+            B: other
+            Return a Point object C that forms a plane with B. 
+        '''
+        r = vlen(A)                     # OA 
+        angO = vector_angle(A, B)
+        angA = 90.0 - (angO/2.0) 
+        c = ptDist(A, B)                # AB
 
+        x = m.radians(angA)
+        b = c * m.cos(x)                # CA
+
+        f = 1.0 - b/r                   # scale factor
+        x, y, z = f*A.x, f*A.y, f*A.z   # OC                     
+        C = Point(x, y, z)
+        OC = vlen(C)
+        vecCB = pt_vector(C, B)        # vector CB  
+
+        _oo = True
+        ECHO('vector A = {}'.format(A), _oo)
+        ECHO('vector B = {}'.format(B), _oo)
+        ECHO('angle A = {}'.format(angA), _oo)
+        ECHO('c = {}'.format(c), _oo)
+        ECHO('OA = {:.4}'.format(r), _oo)
+        ECHO('C = ({:.4}, {:.4}, {:.4})'.format(C.x, C.y, C.z), _oo)
+        ECHO('CA = {:.4}'.format(b), _oo)
+        ECHO('vector(C, B) = {}'.format(vecCB), _oo)
+        t = OC + b 
+        ECHO('OC + CA = {:.4}'.format(t), _oo) 
+        
+        return C
+
+#
+# L: Levels
+# uV: UniqueVertex objects 
 def create_hub(uid, L, uV):
-        spk = list() 
         targets = list()
         the_end = len(L) - 1
 
@@ -494,7 +598,9 @@ def create_hub(uid, L, uV):
                         targets.append(curr+2)
          
         # Find ajacent vertices 
-        find_ajacent_vertex(uid, targets, L, uV)
+        center = uV[uid]
+        spokes = find_ajacent_vertex(uid, targets, L, uV)
+        return Hub(center, spokes)
 
 # bend_angle(), bend_angle2() 
 # a, b: UniqueVertex objects
@@ -504,9 +610,20 @@ def test_func(a, b):
         print('bend_angle(): ', a1)
         print('bend_angle2(): ', a2)
 
-        
-        
+def test_func2(vec):
+        r, theta, phi = get_sph_coordinate(vec)
+        vec2 = RzRy(phi, theta, vec)
+        print('Input vector =', vec)
+        print('r = {}, phi = {}, theta = {}'.format(r, phi, theta))
+        print('Output vector =', vec2)
+
 max_dst = max_distance(ET)
 vL = VertexLevel(V)
 
+Hubs = list()
+for i in range(len(vL.uVertex)):
+        h = create_hub(i, vL.Level, vL.uVertex)
+        Hubs.append(h)
+
+print('{} hubs created.'.format(len(Hubs)))
 
