@@ -75,6 +75,13 @@ def MIN(a, b):
 def MAX(a, b):
         return a if a > b else b
 
+# Remove negative zero
+# Change -0.0 to 0.0 
+# -0.001381 -> 0.0
+def PZERO(n, prec=2):
+        n1 = fn6(n, prec)
+        n2  = 0.0 if abs(n1) == 0.0 else n1
+        return n2
 
 # Point
 #
@@ -253,26 +260,26 @@ def find_vertex1(target, vsrc, prec=5):
         return -1
 
 # Dot product of two vectors
-def dotprod(a, b, prec=3):
+def dotprod(a, b, prec=6):
         x = a.x*b.x + a.y*b.y + a.z*b.z
         return fn6(x, prec)
 
 
 # Cross product of two vectors
-def crossprod(a, b, prec=3):
+def crossprod(a, b, prec=6):
         x = a.y*b.z - a.z*b.y
         y = a.z*b.x - a.x*b.z
         z = a.x*b.y - a.y*b.x
         return Point(x, y, z, prec)
 
 
-def vlen(v):
+def vlen(v, prec=6):
         """ 
         Point v: 
         Return the length between v and the origin (0.0, 0.0, 0.0). 
         """
         d = m.sqrt(v.x*v.x + v.y*v.y + v.z*v.z)
-        return fn6(d)
+        return fn6(d, prec)
 
 def bend_angle(a, b, prec=2):
         """
@@ -353,7 +360,19 @@ def bend_angle2(a, b, prec=2):
 
         return fn6(ang, prec)
 
-def calculate_angle(x1, y1, x=1.0, y=0.0):
+
+def angle360(x, y, val):
+        if x >= 0.0 and y >= 0.0:     # I 
+                return val 
+        elif x < 0.0 and y >= 0.0:    # II
+                return val 
+        elif x < 0.0 and y < 0.0:     # III
+                return 360.0 - val
+        elif x >= 0.0 and y < 0.0:    # IV
+                return 360.0 - val 
+
+
+def calculate_angle(x1, y1, x0=1.0, y0=0.0):
         """
           a dot b = |a||b|cos(theta)
                            a dot b
@@ -377,12 +396,12 @@ def calculate_angle(x1, y1, x=1.0, y=0.0):
         if x1 == 0.0 and y1 == 0.0:
                 return 0.0
 
-        adotb = x1*x + y1*y
+        adotb = x1*x0 + y1*y0
         ma = m.sqrt(x1*x1 + y1*y1)
-        mb = 1.0
+        mb = m.sqrt(x0*x0 + y0*y0)
         v = adotb / (ma*mb)
         rad = m.acos(v)
-        _ang = m.degrees(rad)
+        _ang = fn6(m.degrees(rad), prec=2)
         if x1 >= 0.0 and y1 >= 0.0:     # I 
                 return _ang
         elif x1 < 0.0 and y1 >= 0.0:    # II
@@ -392,20 +411,21 @@ def calculate_angle(x1, y1, x=1.0, y=0.0):
         elif x1 >= 0.0 and y1 < 0.0:    # IV
                 return 360.0 - _ang
 
-
+#     b (x, y, z)
+#    /
+#   /
+#  /
+# +------> a (x0, y0, z0)
 def vector_angle(a, b):
         ''' a and b are Point objects '''
-        adotb = dotprod(a, b)
         ma = m.sqrt(a.x*a.x + a.y*a.y + a.z*a.z)
         mb = m.sqrt(b.x*b.x + b.y*b.y + b.z*b.z)
-        val = adotb / (ma * mb)
-        rad = m.cos(val)
-        _ang = m.degrees(rad)
+        val = dotprod(a, b) / (ma*mb)
+        rad = m.acos(val)
+        ang = m.degrees(rad)
+        # deg = angle360(b.x, b.y, m.degrees(rad))
 
-        return fn6(_ang, prec=2)
-
-
-
+        return fn6(ang, prec=2)
 
 
 def vnormalize(v):
@@ -519,6 +539,127 @@ def project_point_on_line(l0, l1, pt, offset):
         
         return Point(x, y, z) 
 
+# 
+# Spherical coordinate 
+#
+# P(x, y, z) = S(r, theta, phi)
+# r is length of P from origin, 
+# theta is x axis angle to r_pro on xy plane,
+# phi is z axis angle to vector P. 
+# 
+# r_pro = r*sin(theta)
+# x = r_pro * cos(phi) = r * cos(phi) * sin(theta)
+# y = r_pro * sin(phi) = r * sin(phi) * sin(theta)
+# z = r * cos(theta)
+# r = sqrt(x^2 + y^2 + z^2)
+#               
+# theta = arccos(z/r)
+#
+#     y                          x
+# ---------- = sin(theta) = -----------
+# r*sin(phi)                 r*cos(phi)
+# 
+# phi = arctan(y/x)
+# 
+def get_sph_coordinate(vec):
+        x, y, z = vec.x, vec.y, vec.z
+
+        r = m.sqrt(x*x + y*y + z*z)
+        _th = m.acos(z/r)
+
+        # 90.0 (pi/2) creates ZeroDivisionError        
+        # y/0 = oo 
+        _ph = m.pi/2 if x == 0.0 else m.atan(y/x)
+        theta = m.degrees(_th)
+        if x >= 0.0 and y >= 0.0:
+                phi = m.degrees(_ph)
+        elif x < 0.0 and y >= 0.0:
+                phi = 180 + m.degrees(_ph)
+        elif x <= 0.0 and y < 0.0:
+                phi = 180 + m.degrees(_ph)
+        elif x > 0.0 and y < 0.0:
+                phi = 360 + m.degrees(_ph)
+
+        return fn6(r, 3), fn6(theta, 2), fn6(phi, 2)
+
+
+# Helper function of Rx, Ry, Rz 
+# return cos(x), sin(x) 
+def cos_sin(x):
+        rad = m.radians(x)
+        c = m.cos(rad)
+        s = m.sin(rad)
+        return c, s
+
+# Rotation matrices in right-hand coordinate system
+#       c = cos(o), s = sin(o)
+#
+#         1  0  0
+# Rx(o) = 0  c -s
+#         0  s  c 
+#
+# Input vector = [x, y, z]
+# Output vector = [x, c*y - s*z, c*z + s*y]
+# 
+def Rx(angle, vec):
+        x, y, z = vec.x, vec.y, vec.z
+        c, s = cos_sin(angle)
+
+        x2 = x
+        y2 = c*y - s*z
+        z2 = c*z + s*y
+
+        return Point(x2, y2, z2)
+
+#
+#          c  0  s
+# Ry(o) =  0  1  0
+#         -s  0  c 
+#
+# Input vector = [x, y, z]
+# Output vector = [c*x + s*z, y, c*z - s*x]
+#
+def Ry(angle, vec):
+        x, y, z = vec.x, vec.y, vec.z
+        c, s = cos_sin(angle)
+
+        x2 = c*x + s*z
+        y2 = y
+        z2 = c*z - s*x
+
+        return Point(x2, y2, z2)
+
+
+#
+#         c  -s  0
+# Rz(o) = s   c  0
+#         0   0  1 
+# 
+# Input vector = [x, y, z]
+# Output vector = [c*x - s*y, c*y + s*x, z]
+#
+def Rz(angle, vec):
+        x, y, z = vec.x, vec.y, vec.z
+        c, s = cos_sin(angle)
+
+        x2 = c*x - s*y
+        y2 = c*y + s*x
+        z2 = z
+
+        return Point(x2, y2, z2)
+
+
+# Apply Rz ang Ry rotation matrices to a vector.
+# output vector = vec*Rz*Ry
+def RzRy(phi, theta, vec):
+        v2 = Rz(-phi, vec)
+        v3 = Ry(-theta, v2)
+
+        x = PZERO(v3.x)
+        y = PZERO(v3.y)
+        z = PZERO(v3.z)
+
+        return Point(x, y, z, prec=2)
 
 
 # http:#http.developer.nvidia.com/Cg/acos.html
@@ -534,5 +675,7 @@ def acos2(x):
         ret = ret + 1.5707288
         ret = ret * m.sqrt(1.0-x)
         ret = ret - 2 * negate * ret
+
         return negate * 3.14159265358979 + ret
+
 
