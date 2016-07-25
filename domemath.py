@@ -115,7 +115,35 @@ class Point:
 
         def __str__(self):
                 return 'Point<{0:9.6f}, {1:9.6f}, {2:9.6f}>'.format(
-                                                self.x, self.y, self.z)
+                                              self.x, self.y, self.z)
+
+#
+# Vector in 3D space formed by two points a and b.
+# Default vector is a point vector whose tail is at origin.
+# Vector(a, b) = (b.x - a.x, b.y - a.y, b.z - a.z)
+#
+#  +--------------->
+#  tail(a)       head(b) 
+#
+class Vector:
+        def __init__(self, a=Point(0.0, 0.0, 0.0, prec=2), b=None):
+                self.head = b
+                self.tail = a
+                self.length = self.get_length(a, b) 
+
+        def get_length(self, a, b):
+                x = b.x - a.x
+                y = b.y - a.y
+                z = b.z - a.z
+                val = m.sqrt(x*x + y*y + z*z)
+
+                return fn6(val, prec=2)
+
+        def __str__(self):
+                return 'Vector<({}, {}, {})-({}, {}, {})>'.format(
+                                tail.x, tail.y, tail.z, 
+                                head.x, head.y, head.z)
+
 
 class Edge:
         """ 
@@ -655,6 +683,7 @@ def RzRy(phi, theta, vec):
         v2 = Rz(-phi, vec)
         v3 = Ry(-theta, v2)
 
+        # Remove negative zero 
         x = PZERO(v3.x)
         y = PZERO(v3.y)
         z = PZERO(v3.z)

@@ -416,14 +416,14 @@ class VertexLevel:
 class Hub:
         ''' uid: unique index of the center vertex
             center: center vertex
-            spokes: outer vertices  
+            spokes: outer vertices 
         '''
         def __init__(self, center, spokes):
-                self.uid = center.uid          # center 
+                self.uid = center.uid           # center 
                 self.center = center
                 self.Spoke = spokes 
-                self.Spoke2 = list()             # Sorted spokes 
-                self.Spoke_angle = None 
+                self.Spoke2 = list()            # Sorted spokes 
+                self.Spoke_angle2 = None 
 
         # Show only indices 
         def show(self):
@@ -439,7 +439,15 @@ class Hub:
                 for it in self.Spoke:
                         print('\t {}'.format(str(it)))
 
-        # Coordinate of the base vector (x, 0, z)
+        # (it, ang, a, b)
+        def show_spoke_angle(self, obj):
+                index, ang, a, b = obj
+                ta = '({:.2f}, {:.2f}, {:.2f})'.format(a.x, a.y, a.z)
+                tb = '({:.2f}, {:.2f}, {:.2f})'.format(b.x, b.y, b.z)
+                print('({}, {}, {} - {})'.format(index, ang, ta, tb))               
+
+        #
+        # Find coordinate of the base vector (x, 0, z)
         # sqrt(x^2 + 0^2 + z^2) = radius 
         # x^2 = (radius^2 - z^2) 
         # x = sqrt(radius^2 - z^2)
@@ -449,6 +457,23 @@ class Hub:
                 x = m.sqrt(r*r - z*z) 
                 b = Point(x, 0.0, z, prec=2)
                 return pt_vector(a, b)
+
+        # 
+        # vsrc: list of (index, Point)
+        # center: 0th vector 
+        # base vector: 1th vector 
+        #
+        def base_vector2(self, r, vsrc):
+                _ct = vsrc[0]
+                a = _ct[1]
+                _t = vsrc[1]
+                p = _t[1].pt()
+                z = p.z
+                x = m.sqrt(r*r - z*z)
+                b = Point(x, 0.0, z, prec=2)
+
+                return pt_vector(a, b)
+
 
         # [(1, Point(0.0, 0.0, 30.0)), ...]
         # src: all vertices 
@@ -484,13 +509,21 @@ class Hub:
 
                 buf = sorted(src, key=get_key)
                 return buf 
-
-        # Compute the angle between each pair of spokes 
-        # The number of angles matches the number of spokes.
-        # ex) [11, 6, 2, 0, 5, 10]
+        
+        #
+        # Compute the angle between each pair of ajacent spokes 
+        # The number of angles matches total number of spokes.
+        #
+        # ex 1) [11, 6, 2, 0, 5, 10]
         # (11, 6), (6, 2), (2, 0), (0, 5), (5, 10), (10, 11)
+        #
+        # ex 2) [26, 16, 25, 30]
+        # (26, 16), (16, 25), (25, 30) 
+        # (30, 26) can not work because the distance is too big. 
+        #
         def compute_spoke_angle(self, src, vsrc):
-                #vv.append((self.uid, tcenter)) 
+                global max_dst
+
                 vectors = dict()
                 for it in vsrc:
                         key, vec = it           # (index, Point)
@@ -503,18 +536,21 @@ class Hub:
 
                 # Find all spoke pairs 
                 pair = list()
-                last_item = (src2[-1], src2[0])
                 i, end = 0, len(src2)
                 while i < end-1: 
                         a = src2[i] 
                         b = src2[i+1]
                         pair.append((a, b))
                         i += 1
-                pair.append(last_item)
-                del src2[:]
+
+                # Verify condition of the last pair  
+                ih, it = src2[0], src2[-1] 
+                last_item = (ih, it)
+                head, tail = vectors[ih], vectors[it]
+                if ptDist(head, tail, prec=2) <= max_dst:
+                        pair.append(last_item)
 
                 angles = list()
-                # Calculate angle of each pair  
                 for it in pair:
                         _a, _b = it 
                         a = vectors[_a]
@@ -523,42 +559,55 @@ class Hub:
                         item = (it, ang, a, b)
                         angles.append(item)
                 del pair[:]
+                del src2[:]
 
                 return angles 
 
 
-        # Rotate each vertex to the top position (0.0, 0.0, r) 
+        #
+        # Rotate all vertices to the top position (0.0, 0.0, r) 
         #
         # - create list of new vertices [center, 1st, 2nd, ... ] 
-        # - find the base vector - vec(center, (x, 0.0, z))
+        # - find a base vector - vec(center, (x, 0.0, z))
         def process(self):
                 ct = self.center.point
+
+                # Original vertices 
+                vsrc = list()
+                vsrc.append((self.uid, ct))
+                for it in self.Spoke:
+                        vsrc.append((it.uid, it.point))
+                vectors = self.compute_vectors(vsrc)
+
+                # Rotated vertices 
                 r, theta, phi = get_sph_coordinate(ct)
 
-                vv = list()
+                vsrc2 = list()
                 tcenter = RzRy(phi, theta, ct)
-                vv.append((self.uid, tcenter))
+                vsrc2.append((self.uid, tcenter))
                 for it in self.Spoke:
                         tvec = RzRy(phi, theta, it.point)
-                        vv.append((it.uid, tvec))
+                        vsrc2.append((it.uid, tvec))
 
                 x, y, z = ct.xyz()
                 print('// {}, [{}, {}, {}]'.format(self.uid, x, y, z))
                 print('// r = {}, theta = {}, phi = {}'.format(r, theta, phi))
-                make_openscad_vector(vv)
+                make_openscad_vector(vsrc2)
 
                 # base vector
-                _t = vv[1]
-                p = _t[1].pt()  # (index, Point)
-                bv = self.base_vector(r, p, vv[0])
+                # _t = vv[1]
+                # p = _t[1].pt()  # (index, Point)
+                # bv = self.base_vector(r, p, vv[0])
+
+                bv = self.base_vector2(r, vsrc2)
                 print("-->", bv)
 
-                vectors = self.compute_vectors(vv)
-                xangles = self.compute_x_angles(bv, vectors)
+                vectors2 = self.compute_vectors(vsrc2)
+                xangles = self.compute_x_angles(bv, vectors2)
                 xangles2 = self.sort_x_angles(xangles)
 
-                for i in range(len(vectors)):
-                        vec = vectors[i]
+                for i in range(len(vectors2)):
+                        vec = vectors2[i]
                         ang = xangles[i]
                         uid = vec[0]
                         print('{}, {}, {}'.format(uid, str(vec[1]),
@@ -570,13 +619,19 @@ class Hub:
 
                 for it in self.Spoke2:
                         print(it, end=' ')
-                print()
 
+                print("\nRotated vertices")
                 # Spoke angles
-                self.Spoke_angle = self.compute_spoke_angle(self.Spoke2, vv)
-                for it in self.Spoke_angle: 
-                        # print(it, end =' ')     # (it, ang, a, b)
-                        print(it)     # (it, ang, a, b)
+                self.Spoke_angle2 = self.compute_spoke_angle(self.Spoke2,
+                                vectors2)        # vsrc2
+                for it in self.Spoke_angle2: 
+                        self.show_spoke_angle(it)
+
+                print("Original vertices")
+                Spoke_angle = self.compute_spoke_angle(self.Spoke2, vectors)
+                for it in Spoke_angle:
+                        self.show_spoke_angle(it)
+
 #ET = [
 #        [16.4, 1, 1, 0, 0, 50], #0 
 #        [18.54, 2, 0, 1, 0, 45] #1 
