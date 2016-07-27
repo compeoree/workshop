@@ -220,7 +220,13 @@ global max_dst
 # helper function
 # src: list of (0,  Point)
 # Output: vector of  [1, [0.0, 0.0, 30.0]],...
-def make_openscad_vector(src):
+def export_openscad_vector(hub_center, sph_center, src):
+        x, y, z = hub_center.xyz()
+        cuid = src[0][0]
+        r, theta, phi = sph_center.value()
+        
+        print('// {}, [{}, {}, {}]'.format(cuid, x, y, z))
+        print('// r = {}, theta = {}, phi = {}'.format(r, theta, phi))
         print('H = [')
         for it in src:
                 uid = it[0]
@@ -422,8 +428,18 @@ class Hub:
                 self.uid = center.uid           # center 
                 self.center = center
                 self.Spoke = spokes 
-                self.Spoke2 = list()            # Sorted spokes 
-                self.Spoke_angle2 = None 
+                self.scenter = None             # Spherical cooridnate of center 
+                self.Rspoke = None              # Rotated vertices to top center 
+
+                # Sorted indices of the vertices.
+                # It also contains side angles beween spokes.
+                self.Sorted_index = None         
+
+                # list of ((i1, i2), angle, vector_a, vector_b)
+                self.Sorted_spoke = None        
+                self.Sorted_spoke2 = None       # Rotated vertices to top center  
+                self.Edge = None                 
+                self.Face = None                
 
         # Show only indices 
         def show(self):
@@ -433,14 +449,39 @@ class Hub:
                         s2 += '{} '.format(it.uid)
                 print(s1 + s2)
 
-        # Show vertices 
+        # Show Hub data 
         def deepshow(self):
-                print('Hub<{}: {}>'.format(self.uid, str(self.center)))
-                for it in self.Spoke:
-                        print('\t {}'.format(str(it)))
+                if self.Sorted_index is None:
+                        print('Run process() first.')
+                        return 
+
+                print('Hub: {}'.format(self.uid))
+                print('Spherical coordinate of {} vertex'.format(self.uid))
+                r, theta, phi = self.scenter.value()
+                print('\t r = {}, theta = {}, phi = {}'.format(
+                                        r, theta, phi))
+                for it in self.Sorted_index:
+                        print('{:6d}'.format(it[0]), end=' ')
+                print()
+                for it in self.Sorted_index:
+                        print('{:6.2f}'.format(it[1]), end=' ')
+                print()
+
+                # (i1, i2), angle, vector_a, vector_b
+                for it in self.Sorted_spoke:
+                        pair, ang, a, b = it 
+                        print('{}, {}, ({},{},{}) -> ({},{},{})'.format(
+                                pair, 
+                                ang,
+                                a.x, a.y, a.z,
+                                b.x, b.y, b.z))
+                # Test code 
+                ct = self.center.point
+                export_openscad_vector(ct.pt(), self.scenter, self.Rspoke)
+
 
         # (it, ang, a, b)
-        def show_spoke_angle(self, obj):
+        def show_spoke(self, obj):
                 index, ang, a, b = obj
                 ta = '({:.2f}, {:.2f}, {:.2f})'.format(a.x, a.y, a.z)
                 tb = '({:.2f}, {:.2f}, {:.2f})'.format(b.x, b.y, b.z)
@@ -493,6 +534,10 @@ class Hub:
 
         # the base vector is on X axis of XY plane.
         def compute_x_angles(self, base_vec, src):
+                
+                def get_key(item):
+                        return item[1]
+
                 x0, y0 = base_vec.x, base_vec.y
                 buf = list()
                 for it in src:
@@ -500,18 +545,12 @@ class Hub:
                         deg = calculate_angle(b.x, b.y, x0, y0) 
                         buf.append((it[0], deg))
 
-                return buf
+                # Sorting angles
+                return sorted(buf, key=get_key)
 
-        # list of (index, angle) 
-        def sort_x_angles(self, src):
-                def get_key(item):
-                        return item[1]
-
-                buf = sorted(src, key=get_key)
-                return buf 
-        
         #
         # Compute the angle between each pair of ajacent spokes 
+        # and all vectors. 
         # The number of angles matches total number of spokes.
         #
         # ex 1) [11, 6, 2, 0, 5, 10]
@@ -521,7 +560,7 @@ class Hub:
         # (26, 16), (16, 25), (25, 30) 
         # (30, 26) can not work because the distance is too big. 
         #
-        def compute_spoke_angle(self, src, vsrc):
+        def compute_spoke(self, src, vsrc):
                 global max_dst
 
                 vectors = dict()
@@ -563,6 +602,63 @@ class Hub:
 
                 return angles 
 
+        def rotate_vertices(self, phi, theta, top_center):
+                t = list()
+                tc = RzRy(phi, theta, top_center)
+                t.append((self.uid, tc))
+                for it in self.Spoke:
+                        tvec = RzRy(phi, theta, it.point)
+                        t.append((it.uid, tvec))
+                
+                return t
+
+        #
+        # Find all edges 
+        #
+        def find_Edge(self):
+                if self.Sorted_index is None or self.Sorted_spoke is None:
+                        print('Run process()!')
+                        return None
+
+                buf = list()
+                center = self.uid 
+
+                # radial edges 
+                for it in self.Sorted_index:
+                        buf.append((center, it[0]))
+
+                # side edges 
+                for it in self.Sorted_spoke:
+                        buf.append(it[0])
+                
+                return buf
+
+        #
+        # Find all triangular faces.
+        # One side edge and center form a triangle ABC. 
+        #          B
+        #          +  
+        #  A       | 
+        #  +       |
+        #          |
+        #          +  
+        #          C 
+        #
+        def find_Face(self):
+                if self.Sorted_spoke is None:
+                        print('Run process()!')
+                        return None
+
+                buf = list()
+                A = self.uid 
+                
+                # side edges 
+                for it in self.Sorted_spoke:
+                        B, C = it[0]
+                        buf.append((A, B, C))
+
+                return buf 
+
 
         #
         # Rotate all vertices to the top position (0.0, 0.0, r) 
@@ -571,6 +667,8 @@ class Hub:
         # - find a base vector - vec(center, (x, 0.0, z))
         def process(self):
                 ct = self.center.point
+                self.scenter = get_sph_coordinate(ct)
+                r, theta, phi = self.scenter.value()
 
                 # Original vertices 
                 vsrc = list()
@@ -579,72 +677,34 @@ class Hub:
                         vsrc.append((it.uid, it.point))
                 vectors = self.compute_vectors(vsrc)
 
-                # Rotated vertices 
-                r, theta, phi = get_sph_coordinate(ct)
+                self.Rspoke = self.rotate_vertices(phi, theta, ct) 
+                bv = self.base_vector2(r, self.Rspoke)
+                vectors2 = self.compute_vectors(self.Rspoke)
+                self.Sorted_index = self.compute_x_angles(bv, vectors2)
+                self.Sorted_spoke = self.compute_spoke(self.Sorted_index, vectors)
 
-                vsrc2 = list()
-                tcenter = RzRy(phi, theta, ct)
-                vsrc2.append((self.uid, tcenter))
-                for it in self.Spoke:
-                        tvec = RzRy(phi, theta, it.point)
-                        vsrc2.append((it.uid, tvec))
+                # Debugging code
+                # self.Sorted_spoke2 = self.compute_spoke(self.Sorted_index, vectors2)
+                self.Edge = self.find_Edge()
+                self.Face = self.find_Face()
+                self.deepshow()
 
-                x, y, z = ct.xyz()
-                print('// {}, [{}, {}, {}]'.format(self.uid, x, y, z))
-                print('// r = {}, theta = {}, phi = {}'.format(r, theta, phi))
-                make_openscad_vector(vsrc2)
-
-                # base vector
-                # _t = vv[1]
-                # p = _t[1].pt()  # (index, Point)
-                # bv = self.base_vector(r, p, vv[0])
-
-                bv = self.base_vector2(r, vsrc2)
-                print("-->", bv)
-
-                vectors2 = self.compute_vectors(vsrc2)
-                xangles = self.compute_x_angles(bv, vectors2)
-                xangles2 = self.sort_x_angles(xangles)
-
-                for i in range(len(vectors2)):
-                        vec = vectors2[i]
-                        ang = xangles[i]
-                        uid = vec[0]
-                        print('{}, {}, {}'.format(uid, str(vec[1]),
-                                                str(ang[1])))
-                if len(self.Spoke2) > 0:
-                        del self.Spoke2[:]
-                for it in xangles2:
-                        self.Spoke2.append(it)
-
-                for it in self.Spoke2:
-                        print(it, end=' ')
-
-                print("\nRotated vertices")
-                # Spoke angles
-                self.Spoke_angle2 = self.compute_spoke_angle(self.Spoke2,
-                                vectors2)        # vsrc2
-                for it in self.Spoke_angle2: 
-                        self.show_spoke_angle(it)
-
-                print("Original vertices")
-                Spoke_angle = self.compute_spoke_angle(self.Spoke2, vectors)
-                for it in Spoke_angle:
-                        self.show_spoke_angle(it)
-
+# 
+# Find the longest edge 
+#
 #ET = [
 #        [16.4, 1, 1, 0, 0, 50], #0 
 #        [18.54, 2, 0, 1, 0, 45] #1 
 #        ]
+#
 def max_distance(esrc):
-        ''' Find maxium distance '''
         t = list()
         for i in range(len(esrc)):
                 d = esrc[i][0]
                 t.append(d)
         t.sort()
 
-        # last item is the biggest  
+        # last item is the longest  
         return t[-1]  
 
 # How to calculate the range of vertices in a level? 

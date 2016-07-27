@@ -568,6 +568,19 @@ def project_point_on_line(l0, l1, pt, offset):
         return Point(x, y, z) 
 
 # 
+# A point using spherical coordinate in 3D space 
+# 
+class SphPoint: 
+
+        def __init__(self, radius=0.0, theta=0.0, phi=0.0):
+                self.r = fn6(radius, 3)
+                self.theta = fn6(theta, 2)
+                self.phi = fn6(phi, 2) 
+
+        def value(self):
+                return self.r, self.theta, self.phi 
+                
+# 
 # Spherical coordinate 
 #
 # P(x, y, z) = S(r, theta, phi)
@@ -589,6 +602,7 @@ def project_point_on_line(l0, l1, pt, offset):
 # 
 # phi = arctan(y/x)
 # 
+# Return (radius, theta, phi) 
 def get_sph_coordinate(vec):
         x, y, z = vec.x, vec.y, vec.z
 
@@ -608,7 +622,7 @@ def get_sph_coordinate(vec):
         elif x > 0.0 and y < 0.0:
                 phi = 360 + m.degrees(_ph)
 
-        return fn6(r, 3), fn6(theta, 2), fn6(phi, 2)
+        return SphPoint(r, theta, phi)
 
 
 # Helper function of Rx, Ry, Rz 
@@ -669,7 +683,6 @@ def Ry(angle, vec):
 def Rz(angle, vec):
         x, y, z = vec.x, vec.y, vec.z
         c, s = cos_sin(angle)
-
         x2 = c*x - s*y
         y2 = c*y + s*x
         z2 = z
