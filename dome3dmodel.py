@@ -216,6 +216,52 @@ ET = [
 from sortedome import *
 
 global max_dst
+# global Master_table 
+
+#
+# Create a dictionary of all the vertices that map each index to a 3D point.
+# 
+def create_vertex_dict(src):
+        d = dict()
+        for i in range(len(src)):
+                key = i
+                x, y, z = src[i]
+                value = Point(x, y, z, prec=3)
+                d[key] = value
+ 
+        return d
+#
+#  Create a dictionary of all the edges.    
+#  [16.4, 1, 1, 0, 0, 50]
+def create_edge_table(src):
+        buf = list()
+
+        for i in range(len(src)):
+                item = src[i]
+                edge = (item[0], item[1])            # (length, type) 
+                buf.append(edge)
+
+        return tuple(buf)
+
+# Convert length to type 
+def eg_len2type(length):
+        for it in Edge_table:
+                l, t = it
+                if l == length:
+                        return t
+
+# Convert type to length 
+def eg_type2len(type_):
+        for it in Edge_table:
+                l, t = it
+                if t == type_:
+                        return l
+
+# Read-only vertex table  
+Master_table = create_vertex_dict(V)
+
+# Read-only edge table 
+Edge_table = create_edge_table(ET)
 
 # helper function
 # src: list of (0,  Point)
@@ -239,7 +285,7 @@ def export_openscad_vector(hub_center, sph_center, src):
 class UniqueVertex:
         ''' It contains all 3-dimensional information to build hub model.
                 p: Point(x, y, z) 
-                level: a level that contains vertices which have equal height 
+                level: a level that contains vertices which share equal height 
                 level_size: number of vertices in a level 
                 rid: index of the vertex in a level  
                 uid: unique index of vertex 
@@ -378,6 +424,112 @@ class VertexLevel:
                 return t 
 
 #
+# Store all edges in a Hub 
+# 
+# center: Hub.uid               center vertex's uid 
+# radial_x: Hub.Sorted_index    radial edges  
+# side_x: Hub.Sorted_spoke      side edges 
+#
+class HubEdge:
+        
+        def __init__(self, center, radialx, sidex):
+                self.uid = center 
+                
+                self.Radial = list()
+                for it in radialx:
+                        item = self.create_edge(self.uid, it[0])
+                        self.Radial.append(item)
+                
+                self.Side = list()
+                for it in sidex:
+                        ia, ib = it[0]
+                        item = self.create_edge(ia, ib)
+                        self.Side.append(item)
+
+                self.count = len(self.Radial) + len(self.Side)                        
+                self.key = self.create_key() 
+
+        #
+        # Calculate length of each edge. 
+        # Return((ia, ib), length, type)
+        #
+        def create_edge(self, ia, ib):
+                a, b = Master_table[ia], Master_table[ib]
+                length = ptDist(a, b, prec=2)
+                type_ = eg_len2type(length) 
+                
+                return ((ia, ib), length, type_)
+       
+        # Collect all edge types and make a string key 
+        def create_key(self):
+                buf = list()
+                for it in self.Radial:
+                        buf.append(it[-1])
+                for it in self.Side:
+                        buf.append(it[-1])
+
+                key = '-'.join(map(str, buf))
+                del buf[:]
+                return key
+
+        def __str__(self):
+
+                def text_body(src):
+                        TAB = 2*' '
+                        pair, length, type_ = TAB, TAB, TAB 
+                        for it in src:
+                                p, l, t = it
+                                pair += '{}-{} '.format(p[0], p[1])
+                                length += '{} '.format(l)
+                                type_ += '{} '.format(t)
+                        output = '{} \n {} \n {} \n'.format(pair, length, type_)
+
+                        return output
+
+                title = 'Edge: {}\n'.format(self.count)
+                radial_body = text_body(self.Radial)
+                tradial = '  Radial:\n {}'.format(radial_body)
+                side_body = text_body(self.Side)
+                tside = '  Side: \n {}'.format(side_body)
+
+                return title + tradial + tside 
+
+#
+# Store all faces.
+# One side edge and center form a triangle ABC. 
+#          B
+#          +  
+#  A       | 
+#  +       |
+#          |
+#          +  
+#          C 
+#
+# A: Hub.uid                    center vertex's uid
+# sidex: Hub.Sorted_spoke       side edges
+class HubFace:
+
+        def __init__(self, A, sidex):
+                self.data = list()
+                self.A = A
+
+                # Side edges 
+                for it in sidex:
+                        B, C = it[0]
+                        self.data.append((self.A, B, C))
+                
+                self.count = len(self.data)
+
+        def __str__(self):
+                title = 'Face: {}\n'.format(self.count)
+                body = 2*' ' 
+                for it in self.data:
+                        A, B, C = it
+                        body += '{}-{}-{} '.format(A, B, C)
+
+                return title + body 
+
+#       
 # Hub is basic data type to create a 3D model.  
 # It contains vectors that represent spokes, bend angles, and acute angles.
 #
@@ -425,6 +577,8 @@ class Hub:
             spokes: outer vertices 
         '''
         def __init__(self, center, spokes):
+                self.tag = None                 # (Edge.count, Edge.key)  
+
                 self.uid = center.uid           # center 
                 self.center = center
                 self.Spoke = spokes 
@@ -438,8 +592,8 @@ class Hub:
                 # list of ((i1, i2), angle, vector_a, vector_b)
                 self.Sorted_spoke = None        
                 self.Sorted_spoke2 = None       # Rotated vertices to top center  
-                self.Edge = None                 
-                self.Face = None                
+                self.Edge = None                # All edges  
+                self.Face = None                # All faces 
 
         # Show only indices 
         def show(self):
@@ -475,9 +629,14 @@ class Hub:
                                 ang,
                                 a.x, a.y, a.z,
                                 b.x, b.y, b.z))
+
+                print(self.Edge)
+                print(self.Face)
+                print(self.Edge.key)
+
                 # Test code 
-                ct = self.center.point
-                export_openscad_vector(ct.pt(), self.scenter, self.Rspoke)
+                # ct = self.center.point
+                # export_openscad_vector(ct.pt(), self.scenter, self.Rspoke)
 
 
         # (it, ang, a, b)
@@ -613,54 +772,6 @@ class Hub:
                 return t
 
         #
-        # Find all edges 
-        #
-        def find_Edge(self):
-                if self.Sorted_index is None or self.Sorted_spoke is None:
-                        print('Run process()!')
-                        return None
-
-                buf = list()
-                center = self.uid 
-
-                # radial edges 
-                for it in self.Sorted_index:
-                        buf.append((center, it[0]))
-
-                # side edges 
-                for it in self.Sorted_spoke:
-                        buf.append(it[0])
-                
-                return buf
-
-        #
-        # Find all triangular faces.
-        # One side edge and center form a triangle ABC. 
-        #          B
-        #          +  
-        #  A       | 
-        #  +       |
-        #          |
-        #          +  
-        #          C 
-        #
-        def find_Face(self):
-                if self.Sorted_spoke is None:
-                        print('Run process()!')
-                        return None
-
-                buf = list()
-                A = self.uid 
-                
-                # side edges 
-                for it in self.Sorted_spoke:
-                        B, C = it[0]
-                        buf.append((A, B, C))
-
-                return buf 
-
-
-        #
         # Rotate all vertices to the top position (0.0, 0.0, r) 
         #
         # - create list of new vertices [center, 1st, 2nd, ... ] 
@@ -685,9 +796,15 @@ class Hub:
 
                 # Debugging code
                 # self.Sorted_spoke2 = self.compute_spoke(self.Sorted_index, vectors2)
-                self.Edge = self.find_Edge()
-                self.Face = self.find_Face()
-                self.deepshow()
+                if self.Sorted_index is None or self.Sorted_spoke is None:
+                        print('Hub.process(): Critical error!')
+                        return 
+                self.Edge = HubEdge(self.uid, self.Sorted_index,
+                                self.Sorted_spoke)
+                self.Face = HubFace(self.uid, self.Sorted_spoke)
+                self.tag = (self.Edge.count, self.Edge.key)
+
+                # self.deepshow()
 
 # 
 # Find the longest edge 
@@ -864,20 +981,20 @@ def test_func(a, b):
         print('bend_angle(): ', a1)
         print('bend_angle2(): ', a2)
 
-def test_func2(vec):
-        r, theta, phi = get_sph_coordinate(vec)
-        vec2 = RzRy(phi, theta, vec)
-        print('Input vector =', vec)
-        print('r = {}, phi = {}, theta = {}'.format(r, phi, theta))
-        print('Output vector =', vec2)
 
-max_dst = max_distance(ET)
-vL = VertexLevel(V)
+if __name__ == '__main__':
+        max_dst = max_distance(ET)
+        vL = VertexLevel(V)
 
-Hubs = list()
-for i in range(len(vL.uVertex)):
-        h = create_hub(i, vL.Level, vL.uVertex)
-        Hubs.append(h)
+        Hubs = list()
+        for i in range(len(vL.uVertex)):
+                h = create_hub(i, vL.Level, vL.uVertex)
+                h.process()
+                Hubs.append(h)
+        print('{} hubs created.'.format(len(Hubs)))
 
-print('{} hubs created.'.format(len(Hubs)))
+        for i in range(len(Hubs)):
+                h = Hubs[i]
+                print(h.uid, h.tag)
+
 
