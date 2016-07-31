@@ -235,7 +235,6 @@ def create_vertex_dict(src):
 #  [16.4, 1, 1, 0, 0, 50]
 def create_edge_table(src):
         buf = list()
-
         for i in range(len(src)):
                 item = src[i]
                 edge = (item[0], item[1])            # (length, type) 
@@ -424,13 +423,13 @@ class VertexLevel:
                 return t 
 
 #
-# Store all edges in a Hub 
+# Store all edges in a Hub3D 
 # 
-# center: Hub.uid               center vertex's uid 
-# radial_x: Hub.Sorted_index    radial edges  
-# side_x: Hub.Sorted_spoke      side edges 
+# center: Hub3D.uid               center vertex's uid 
+# radial_x: Hub3D.Sorted_index    radial edges  
+# side_x: Hub3D.Sorted_spoke      side edges 
 #
-class HubEdge:
+class Hub3DEdge:
         
         def __init__(self, center, radialx, sidex):
                 self.uid = center 
@@ -447,6 +446,8 @@ class HubEdge:
                         self.Side.append(item)
 
                 self.count = len(self.Radial) + len(self.Side)                        
+
+                # Make it (self.count, index_string)?
                 self.key = self.create_key() 
 
         #
@@ -470,6 +471,7 @@ class HubEdge:
 
                 key = '-'.join(map(str, buf))
                 del buf[:]
+
                 return key
 
         def __str__(self):
@@ -505,9 +507,9 @@ class HubEdge:
 #          +  
 #          C 
 #
-# A: Hub.uid                    center vertex's uid
-# sidex: Hub.Sorted_spoke       side edges
-class HubFace:
+# A: Hub3D.uid                    center vertex's uid
+# sidex: Hub3D.Sorted_spoke       side edges
+class Hub3DFace:
 
         def __init__(self, A, sidex):
                 self.data = list()
@@ -530,7 +532,7 @@ class HubFace:
                 return title + body 
 
 #       
-# Hub is basic data type to create a 3D model.  
+# Hub3D is core object to represent a 3D hub.  
 # It contains vectors that represent spokes, bend angles, and acute angles.
 #
 # Outer vertices and one center vertex forms one hub
@@ -571,13 +573,13 @@ class HubFace:
 #  0        10
 #       5
 #
-class Hub:
+class Hub3D:
         ''' uid: unique index of the center vertex
             center: center vertex
             spokes: outer vertices 
         '''
         def __init__(self, center, spokes):
-                self.tag = None                 # (Edge.count, Edge.key)  
+                self.tag = None                 # (count, key_string)  
 
                 self.uid = center.uid           # center 
                 self.center = center
@@ -603,13 +605,13 @@ class Hub:
                         s2 += '{} '.format(it.uid)
                 print(s1 + s2)
 
-        # Show Hub data 
+        # Show Hub3D data 
         def deepshow(self):
                 if self.Sorted_index is None:
                         print('Run process() first.')
                         return 
 
-                print('Hub: {}'.format(self.uid))
+                print('Hub3D: {}'.format(self.uid))
                 print('Spherical coordinate of {} vertex'.format(self.uid))
                 r, theta, phi = self.scenter.value()
                 print('\t r = {}, theta = {}, phi = {}'.format(
@@ -693,10 +695,6 @@ class Hub:
 
         # the base vector is on X axis of XY plane.
         def compute_x_angles(self, base_vec, src):
-                
-                def get_key(item):
-                        return item[1]
-
                 x0, y0 = base_vec.x, base_vec.y
                 buf = list()
                 for it in src:
@@ -705,7 +703,7 @@ class Hub:
                         buf.append((it[0], deg))
 
                 # Sorting angles
-                return sorted(buf, key=get_key)
+                return sorted(buf, key=lambda x: x[1])
 
         #
         # Compute the angle between each pair of ajacent spokes 
@@ -797,11 +795,11 @@ class Hub:
                 # Debugging code
                 # self.Sorted_spoke2 = self.compute_spoke(self.Sorted_index, vectors2)
                 if self.Sorted_index is None or self.Sorted_spoke is None:
-                        print('Hub.process(): Critical error!')
+                        print('Hub3D.process(): Critical error!')
                         return 
-                self.Edge = HubEdge(self.uid, self.Sorted_index,
+                self.Edge = Hub3DEdge(self.uid, self.Sorted_index,
                                 self.Sorted_spoke)
-                self.Face = HubFace(self.uid, self.Sorted_spoke)
+                self.Face = Hub3DFace(self.uid, self.Sorted_spoke)
                 self.tag = (self.Edge.count, self.Edge.key)
 
                 # self.deepshow()
@@ -941,7 +939,7 @@ def find_point_on_plane(A, B):
 #
 # L: Levels
 # uV: UniqueVertex objects 
-def create_hub(uid, L, uV):
+def create_hub3d(uid, L, uV):
         targets = list()
         the_end = len(L) - 1
 
@@ -971,7 +969,8 @@ def create_hub(uid, L, uV):
         # Find ajacent vertices 
         center = uV[uid]
         spokes = find_ajacent_vertex(uid, targets, L, uV)
-        return Hub(center, spokes)
+        return Hub3D(center, spokes)
+
 
 # bend_angle(), bend_angle2() 
 # a, b: UniqueVertex objects
@@ -982,19 +981,73 @@ def test_func(a, b):
         print('bend_angle2(): ', a2)
 
 
+def hub3d_keys(hsrc):
+        buf = list()
+        for i in range(len(hsrc)):
+                h = hsrc[i]
+                c, key = h.tag
+                buf.append(key)
+        buf.sort()
+
+        d = dict()
+        for key in buf:
+                if key not in d:
+                        d[key] = 1
+                else:
+                        d[key] += 1
+        keys = sorted(d.keys(), key=lambda x: len(x))
+        del buf[:]
+
+        keys2 = list()
+        for key in keys:
+                item = (key, d[key])
+                keys2.append(item)
+        d.clear()
+        del keys[:]
+
+        return keys2
+
+
+# Hub3D.tag: (edge_count, edge_indices) 
+# hsrc: list of Hub3D
+def collect_base_hubs(hsrc):
+
+        def get_hub(target, hsrc):
+                for it in hsrc:
+                        cnt, key = it.tag
+                        if target == key:
+                                return it
+                        else:
+                                pass
+                return None
+
+        keys = hub3d_keys(hsrc)
+        bh = list()
+        for key, count in keys:
+                hub = get_hub(key, hsrc)
+                item = (hub, count)
+                bh.append(item)
+        del keys[:]
+
+        return bh 
+
+        # Create OpenSCAD codes for each hub type
+
+
 if __name__ == '__main__':
         max_dst = max_distance(ET)
         vL = VertexLevel(V)
 
         Hubs = list()
         for i in range(len(vL.uVertex)):
-                h = create_hub(i, vL.Level, vL.uVertex)
+                h = create_hub3d(i, vL.Level, vL.uVertex)
                 h.process()
                 Hubs.append(h)
         print('{} hubs created.'.format(len(Hubs)))
 
-        for i in range(len(Hubs)):
-                h = Hubs[i]
-                print(h.uid, h.tag)
+        Bh = collect_base_hubs(Hubs)
+        for it, count in Bh:
+                print(it.tag, count)
+
 
 
