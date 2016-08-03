@@ -117,10 +117,49 @@ class Point:
                 return 'Point<{0:9.6f}, {1:9.6f}, {2:9.6f}>'.format(
                                               self.x, self.y, self.z)
 
+
+# Create a vector using two points a and b
+# vector = b - a
+# Return Point object 
+def pt_vector(a, b, prec=2):
+        x = b.x - a.x 
+        y = b.y - a.y
+        z = b.z - a.z 
+
+        return Point(x, y, z, prec=2)
+
+#
+# http://math.oregonstate.edu/home/programs/undergrad/CalculusQuestStudyGuides/vcalc/lineplane/lineplane.html
+# Vector form of line equation in 3D space
+# 
+# A line equation that goes through point P_0(x_0, y_0, z_0) and 
+# parallel to vec_v <a, b, c>.
+# vec_r_0 is position vector of P_0. 
+#
+# The parametric line equation of vec_r is 
+# where t is the parametric variable.  
+# vec_r = vec_r_0 + t*vec_v 
+#
+# vec_r = <x, y, z>
+# vec_r_0 = <x_0, y_0, z_0> 
+# vec_v = <a, b, c>
+# <x, y, z> = <x_0, y_0, z_0> + t*<a, b, c>
+#           = <x_0, y_0, z_0> + <a*t, b*t, c*t>
+#           = <x_0 + a*t, y_0 + b*t, z_0 + c*t>
+# Position of P is determined by
+# x = x_0 + a*t
+# y = y_0 + b*t 
+# z = z_0 + c*t 
+#
+
+
+
 #
 # Vector in 3D space formed by two points a and b.
 # Default vector is a point vector whose tail is at origin.
-# Vector(a, b) = (b.x - a.x, b.y - a.y, b.z - a.z)
+# It stores the two points to have vector's position in 3D space.
+# Because the result vector becomes a point. 
+# Vector(a, b) = <b.x - a.x, b.y - a.y, b.z - a.z>
 #
 #  +--------------->
 #  tail(a)       head(b) 
@@ -129,21 +168,54 @@ class Vector:
         def __init__(self, a=Point(0.0, 0.0, 0.0, prec=2), b=None):
                 self.head = b
                 self.tail = a
+                self.vec = pt_vector(a, b) 
                 self.length = self.get_length(a, b) 
+                self.P = None                   # head of scaled vector
+                self.svec = None                # Scaled vector 
+                self.slength = None
 
         def get_length(self, a, b):
+                import math 
+
                 x = b.x - a.x
                 y = b.y - a.y
                 z = b.z - a.z
-                val = m.sqrt(x*x + y*y + z*z)
+                val = math.sqrt(x*x + y*y + z*z)
 
                 return fn6(val, prec=2)
+        # 
+        # Reduce the vector   
+        # Find new head by xM 
+        # WIP 
+        # Vector form of line equation
+        # vec_r = vec_r_0 + t*vec_v 
+        # <x, y, z> = <x_0 + a*t, y_0 + b*t, z_0 + c*t>
+        #
+        # t: scale factor    
+        def scale(self, t):
+                vec_v = self.vec 
+                vec_r_0 = self.tail
+                x_0, y_0, z_0 = vec_r_0.xyz()
+                a, b, c = vec_v.xyz()
+
+                # Position vector r at P(x, y, z) 
+                x = x_0 + a*t
+                y = y_0 + b*t 
+                z = z_0 + c*t
+                P = Point(x, y, z, prec=2)
+                self.P = Point(x, y, z, prec=2)
+
+                # Scaled vector 
+                self.svec = pt_vector(vec_r_0, P) 
+                self.slength = self.get_length(vec_r_0, P)
 
         def __str__(self):
-                return 'Vector<({}, {}, {})-({}, {}, {})>'.format(
-                                tail.x, tail.y, tail.z, 
-                                head.x, head.y, head.z)
-
+                a, b = self.tail, self.head
+                return 'Vector<({},{},{}) - ({},{},{}), {}>'.format(
+                                a.x, a.y, a.z, 
+                                b.x, b.y, b.z,
+                                self.length
+                                )
 
 class Edge:
         """ 

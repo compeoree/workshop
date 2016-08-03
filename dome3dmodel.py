@@ -214,6 +214,7 @@ ET = [
 
 
 from sortedome import *
+import math as m
 
 global max_dst
 # global Master_table 
@@ -484,7 +485,7 @@ class Hub3DEdge:
                                 pair += '{}-{} '.format(p[0], p[1])
                                 length += '{} '.format(l)
                                 type_ += '{} '.format(t)
-                        output = '{} \n {} \n {} \n'.format(pair, length, type_)
+                        output = '{} \n {} \n {}'.format(pair, length, type_)
 
                         return output
 
@@ -492,7 +493,7 @@ class Hub3DEdge:
                 radial_body = text_body(self.Radial)
                 tradial = '  Radial:\n {}'.format(radial_body)
                 side_body = text_body(self.Side)
-                tside = '  Side: \n {}'.format(side_body)
+                tside = '\n  Side: \n {}'.format(side_body)
 
                 return title + tradial + tside 
 
@@ -597,6 +598,17 @@ class Hub3D:
                 self.Edge = None                # All edges  
                 self.Face = None                # All faces 
 
+        # Get the point of a vertex
+        # Return new Point() 
+        def get_point(self, target):
+                if self.uid == target:
+                        return self.center.point.pt()
+
+                for it in self.Spoke:
+                        if it.uid == target:
+                                return it.point.pt()
+                return None         
+
         # Show only indices 
         def show(self):
                 s1 = '{}: '.format(self.uid)
@@ -607,34 +619,49 @@ class Hub3D:
 
         # Show Hub3D data 
         def deepshow(self):
+                def NEWLINE():
+                        print()
+
                 if self.Sorted_index is None:
                         print('Run process() first.')
                         return 
 
-                print('Hub3D: {}'.format(self.uid))
-                print('Spherical coordinate of {} vertex'.format(self.uid))
+                print('\n\tHub3D: {}'.format(self.uid))
+                print('Spherical coordinate of vertex {}'.format(self.uid))
                 r, theta, phi = self.scenter.value()
-                print('\t r = {}, theta = {}, phi = {}'.format(
+                print('  r = {}, theta = {}, phi = {}'.format(
                                         r, theta, phi))
+                print('Key:', self.Edge.key)
+
+                print('Vertex order:')
                 for it in self.Sorted_index:
                         print('{:6d}'.format(it[0]), end=' ')
-                print()
+                NEWLINE()
                 for it in self.Sorted_index:
                         print('{:6.2f}'.format(it[1]), end=' ')
-                print()
+
+                NEWLINE()
+                print('Side angle:')
 
                 # (i1, i2), angle, vector_a, vector_b
                 for it in self.Sorted_spoke:
                         pair, ang, a, b = it 
-                        print('{}, {}, ({},{},{}) -> ({},{},{})'.format(
-                                pair, 
-                                ang,
-                                a.x, a.y, a.z,
-                                b.x, b.y, b.z))
+#print('{}, {}, ({},{},{}) -> ({},{},{})'.format(
+#                                pair, 
+#                                ang,
+#                                a.x, a.y, a.z,
+#                                b.x, b.y, b.z))
+                        ia, ib = pair 
+                        print('{}-{}'.format(ia, ib), end=' ')
 
+                NEWLINE()
+                for it in self.Sorted_spoke:
+                        t, ang, a, b = it
+                        print(ang, end=' ')
+
+                NEWLINE()
                 print(self.Edge)
                 print(self.Face)
-                print(self.Edge.key)
 
                 # Test code 
                 # ct = self.center.point
@@ -642,7 +669,7 @@ class Hub3D:
 
 
         # (it, ang, a, b)
-        def show_spoke(self, obj):
+        def show_sorted_spoke(self, obj):
                 index, ang, a, b = obj
                 ta = '({:.2f}, {:.2f}, {:.2f})'.format(a.x, a.y, a.z)
                 tb = '({:.2f}, {:.2f}, {:.2f})'.format(b.x, b.y, b.z)
@@ -803,6 +830,45 @@ class Hub3D:
                 self.tag = (self.Edge.count, self.Edge.key)
 
                 # self.deepshow()
+
+#
+# 3D model of a base hub 
+# bh_obj: (Hub3D, count)
+#
+class Hub3DModel:
+
+        def __init__(self, bh_obj):
+                self.bh, self.count = bh_obj 
+                self.Vector = self.init_vector()
+                self.Vector2 = None
+
+        # Create Vector objects
+        # Vector(a, b)
+        # a: center vertex 
+        # b: other vertex 
+        def init_vector(self):
+                ia = self.bh.uid 
+                a = self.bh.get_point(ia)
+                vecs = list() 
+                
+                for ib, ang in self.bh.Sorted_index:
+                        b = self.bh.get_point(ib)
+                        v = Vector(a, b)
+                        vecs.append(v)
+                
+                return vecs 
+
+        # Increase / reduce the model 
+        def scale(self, x):
+                from copy import deepcopy
+
+                src = deepcopy(self.Vector)
+                for v in src:
+                        v.scale(x)
+
+                self.Vector2 = src
+                        
+
 
 # 
 # Find the longest edge 
@@ -1012,7 +1078,7 @@ def hub3d_keys(hsrc):
 # hsrc: list of Hub3D
 def collect_base_hubs(hsrc):
 
-        def get_hub(target, hsrc):
+        def find_hub(target, hsrc):
                 for it in hsrc:
                         cnt, key = it.tag
                         if target == key:
@@ -1021,15 +1087,21 @@ def collect_base_hubs(hsrc):
                                 pass
                 return None
 
+        def get_key(item):
+                hub, c = item
+                c, key_string = hub.tag
+
+                return len(key_string)
+
         keys = hub3d_keys(hsrc)
         bh = list()
         for key, count in keys:
-                hub = get_hub(key, hsrc)
+                hub = find_hub(key, hsrc)
                 item = (hub, count)
                 bh.append(item)
         del keys[:]
 
-        return bh 
+        return sorted(bh, key=get_key, reverse=True) 
 
         # Create OpenSCAD codes for each hub type
 
