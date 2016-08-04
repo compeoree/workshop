@@ -214,6 +214,7 @@ ET = [
 
 
 from sortedome import *
+from copy import deepcopy
 import math as m
 
 global max_dst
@@ -858,18 +859,30 @@ class Hub3DModel:
                 
                 return vecs 
 
-        # Increase / reduce the model 
-        def scale(self, x):
-                from copy import deepcopy
-
+        # Reduce the model 
+        # t: scale factor 
+        def scale(self, t):
                 src = deepcopy(self.Vector)
                 for v in src:
-                        v.scale(x)
+                        v.scale(t)
 
                 self.Vector2 = src
                         
+        # Return a Vector object
+        def vector(self, i):
+                if i < 0 or i > len(self.Vector)-1:
+                        print('Out of range')
+                        return None
 
+                return self.Vector[i]
 
+        # Return a scaled Vector object 
+        def vector2(self, i):
+                if i < 0 or i > len(self.Vector2)-1:
+                        print('Out of range')
+                        return None
+
+                return self.Vector2[i]
 # 
 # Find the longest edge 
 #

@@ -209,9 +209,11 @@ class Vector:
                 self.svec = pt_vector(vec_r_0, P) 
                 self.slength = self.get_length(vec_r_0, P)
 
+
+        # a and b are position vectors. 
         def __str__(self):
                 a, b = self.tail, self.head
-                return 'Vector<({},{},{}) - ({},{},{}), {}>'.format(
+                return 'Vector<<{},{},{}> - <{},{},{}>, {}>'.format(
                                 a.x, a.y, a.z, 
                                 b.x, b.y, b.z,
                                 self.length
